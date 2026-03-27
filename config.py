@@ -31,3 +31,4 @@ class AntConfig:
     # ── 数据 ────────────────────────────────────────────────────
     tokenizer_name: str = "bert-base-uncased"
     checkpoint_path: str = "ant_best.pt"
+    use_dummy_data: bool = False
