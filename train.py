@@ -13,7 +13,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import OneCycleLR
 from tqdm import tqdm
 
-from config import AntConfig
+from model.config import AntConfig
 from model.ant import AntTransformer
 from data.dataset import get_dataloaders
 
@@ -174,6 +174,8 @@ if __name__ == "__main__":
     parser.add_argument("--d_model",    type=int,   default=None)
     parser.add_argument("--num_layers", type=int,   default=None)
     parser.add_argument("--use_dummy_data", action="store_true")
+    parser.add_argument("--subset_size", type=int,   default=None)
+    parser.add_argument("--max_seq_len", type=int,   default=None)
     args = parser.parse_args()
 
     cfg = AntConfig()

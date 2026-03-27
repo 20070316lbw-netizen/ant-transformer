@@ -41,7 +41,7 @@ def run_smoke_test(args):
     BATCH_SIZE  = args.batch_size
     STEPS       = args.steps
 
-    from config import AntConfig
+    from model.config import AntConfig
 
     config = AntConfig(
         vocab_size   = VOCAB_SIZE,

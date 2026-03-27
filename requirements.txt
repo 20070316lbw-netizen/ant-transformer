@@ -2,3 +2,7 @@ torch
 transformers
 datasets
 tqdm
+lightgbm
+xgboost
+catboost
+pyyaml

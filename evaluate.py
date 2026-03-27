@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from config import AntConfig
+from model.config import AntConfig
 from model.ant import AntTransformer
 from data.dataset import get_dataloaders
 

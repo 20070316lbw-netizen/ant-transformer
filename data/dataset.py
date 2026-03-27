@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from config import AntConfig
+from model.config import AntConfig
 
 
 class SST2Dataset(Dataset):
@@ -26,6 +26,12 @@ class SST2Dataset(Dataset):
         """
         # 从 HuggingFace Hub 加载 SST-2（GLUE 子集）
         self.data = load_dataset("glue", "sst2", split=split)
+        
+        # 为了实验速度，如果 config 中指定了 subset_size，则进行采样
+        subset_size = getattr(config, "subset_size", None)
+        if subset_size is not None and subset_size < len(self.data):
+            self.data = self.data.select(range(subset_size))
+            
         self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
         self.max_seq_len = config.max_seq_len
 

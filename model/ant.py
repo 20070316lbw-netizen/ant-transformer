@@ -36,7 +36,7 @@ import math
 import torch
 import torch.nn as nn
 
-from config import AntConfig
+from .config import AntConfig
 from .encoder import AntEncoder
 
 
