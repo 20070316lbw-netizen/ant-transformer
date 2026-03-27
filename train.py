@@ -134,7 +134,7 @@ def main(config: AntConfig):
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(model.state_dict(), config.checkpoint_path)
-            print(f"  ✓ Saved best (val_acc={val_acc:.4f})")
+            print(f"  [OK] Saved best (val_acc={val_acc:.4f})")
         print()
 
     print(f"Training done. Best val acc: {best_val_acc:.4f}")
