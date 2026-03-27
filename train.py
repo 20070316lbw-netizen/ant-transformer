@@ -106,11 +106,12 @@ def main(config: AntConfig):
     # 优化器 + 学习率调度（OneCycle 对 Transformer 很稳）
     optimizer = AdamW(model.parameters(), lr=config.lr, weight_decay=0.01)
     total_steps = len(train_loader) * config.epochs
+    pct_start = min(config.warmup_steps / total_steps, 0.99) if total_steps > 0 else 0.3
     scheduler = OneCycleLR(
         optimizer,
         max_lr=config.lr,
         total_steps=total_steps,
-        pct_start=config.warmup_steps / total_steps,
+        pct_start=pct_start,
         anneal_strategy="cos",
     )
     criterion = nn.CrossEntropyLoss()
@@ -151,6 +152,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int,   default=None)
     parser.add_argument("--d_model",    type=int,   default=None)
     parser.add_argument("--num_layers", type=int,   default=None)
+    parser.add_argument("--use_dummy_data", action="store_true")
     args = parser.parse_args()
 
     cfg = AntConfig()
