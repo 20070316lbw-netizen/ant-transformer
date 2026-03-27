@@ -29,9 +29,10 @@ def train_one_epoch(
     criterion,
     device: torch.device,
     max_grad_norm: float,
-) -> tuple[float, float, list[float]]:
+    gate_lambda: float = 0.0,
+) -> tuple[float, float, float, list[float]]:
     model.train()
-    total_loss = total_correct = total_samples = 0
+    total_loss = total_correct = total_samples = total_gate_loss = 0
     # 用于记录每层 gate 的累加值和数量
     gate_sums = [0.0] * model.config.num_layers
     batch_count = 0
@@ -43,7 +44,14 @@ def train_one_epoch(
 
         optimizer.zero_grad()
         logits, _, all_gates = model(input_ids, attention_mask)
-        loss = criterion(logits, labels)
+        
+        # ① 原生任务 Loss
+        task_loss = criterion(logits, labels)
+        
+        # ② 门控正则 Loss (L1 鼓励稀疏，即 gate -> 0，跳过层)
+        gate_loss = torch.stack([g.abs().mean() for g in all_gates]).mean()
+        
+        loss = task_loss + gate_lambda * gate_loss
         loss.backward()
 
         nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
@@ -51,17 +59,18 @@ def train_one_epoch(
         scheduler.step()
 
         bs = labels.size(0)
-        total_loss    += loss.item() * bs
-        total_correct += (logits.argmax(dim=-1) == labels).sum().item()
-        total_samples += bs
+        total_loss      += loss.item() * bs
+        total_gate_loss += gate_loss.item() * bs
+        total_correct   += (logits.argmax(dim=-1) == labels).sum().item()
+        total_samples   += bs
 
-        # 累加 gate 值 (取 CLS token 或全序列均值均可，此处取全序列均值)
+        # 累加 gate 值
         for i, g in enumerate(all_gates):
             gate_sums[i] += g.mean().item()
         batch_count += 1
 
     avg_gates = [s / batch_count for s in gate_sums]
-    return total_loss / total_samples, total_correct / total_samples, avg_gates
+    return total_loss / total_samples, total_gate_loss / total_samples, total_correct / total_samples, avg_gates
 
 
 # ─────────────────────────────────────────────────────────────
@@ -109,7 +118,7 @@ def main(config: AntConfig):
     print(f"Layers: {config.num_layers}")
     print(f"d_model: {config.d_model}\n")
 
-    # 优化器 + 学习率调度（OneCycle 对 Transformer 很稳）
+    # 优化器 + 学习率调度
     optimizer = AdamW(model.parameters(), lr=config.lr, weight_decay=0.01)
     
     total_steps = len(train_loader) * config.epochs
@@ -130,13 +139,13 @@ def main(config: AntConfig):
     for epoch in range(1, config.epochs + 1):
         print(f"Epoch {epoch:02d}/{config.epochs}")
 
-        train_loss, train_acc, avg_gates = train_one_epoch(
-            model, train_loader, optimizer, scheduler, criterion, device, config.max_grad_norm,
+        train_loss, train_gate_loss, train_acc, avg_gates = train_one_epoch(
+            model, train_loader, optimizer, scheduler, criterion, device, config.max_grad_norm, config.gate_lambda
         )
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
 
         print(
-            f"  Train loss={train_loss:.4f} acc={train_acc:.4f}\n"
+            f"  Train loss={train_loss:.4f} (gate={train_gate_loss:.4f}) acc={train_acc:.4f}\n"
             f"  Val   loss={val_loss:.4f} acc={val_acc:.4f}"
         )
 

@@ -26,6 +26,7 @@ class AntConfig:
     epochs: int = 10
     max_grad_norm: float = 1.0
     warmup_steps: int = 500
+    gate_lambda: float = 0.01    # 门控 L1 正则权重（鼓励稀疏/跳过层）
 
     # ── 数据 ────────────────────────────────────────────────────
     tokenizer_name: str = "bert-base-uncased"
