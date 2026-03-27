@@ -29,9 +29,12 @@ def train_one_epoch(
     criterion,
     device: torch.device,
     max_grad_norm: float,
-) -> tuple[float, float]:
+) -> tuple[float, float, list[float]]:
     model.train()
     total_loss = total_correct = total_samples = 0
+    # 用于记录每层 gate 的累加值和数量
+    gate_sums = [0.0] * model.config.num_layers
+    batch_count = 0
 
     for batch in tqdm(loader, desc="  train", leave=False):
         input_ids      = batch["input_ids"].to(device)
@@ -39,7 +42,7 @@ def train_one_epoch(
         labels         = batch["label"].to(device)
 
         optimizer.zero_grad()
-        logits, _, _ = model(input_ids, attention_mask)
+        logits, _, all_gates = model(input_ids, attention_mask)
         loss = criterion(logits, labels)
         loss.backward()
 
@@ -52,7 +55,13 @@ def train_one_epoch(
         total_correct += (logits.argmax(dim=-1) == labels).sum().item()
         total_samples += bs
 
-    return total_loss / total_samples, total_correct / total_samples
+        # 累加 gate 值 (取 CLS token 或全序列均值均可，此处取全序列均值)
+        for i, g in enumerate(all_gates):
+            gate_sums[i] += g.mean().item()
+        batch_count += 1
+
+    avg_gates = [s / batch_count for s in gate_sums]
+    return total_loss / total_samples, total_correct / total_samples, avg_gates
 
 
 # ─────────────────────────────────────────────────────────────
@@ -121,7 +130,7 @@ def main(config: AntConfig):
     for epoch in range(1, config.epochs + 1):
         print(f"Epoch {epoch:02d}/{config.epochs}")
 
-        train_loss, train_acc = train_one_epoch(
+        train_loss, train_acc, avg_gates = train_one_epoch(
             model, train_loader, optimizer, scheduler, criterion, device, config.max_grad_norm,
         )
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
@@ -130,6 +139,11 @@ def main(config: AntConfig):
             f"  Train loss={train_loss:.4f} acc={train_acc:.4f}\n"
             f"  Val   loss={val_loss:.4f} acc={val_acc:.4f}"
         )
+
+        # 输出每层 Gate 平均值
+        print("  Gate Monitoring (Average per Layer):")
+        for i, g in enumerate(avg_gates):
+            print(f"    Layer {i+1}: {g:.4f}")
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
