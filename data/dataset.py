@@ -25,7 +25,8 @@ class SST2Dataset(Dataset):
             config: AntConfig
         """
         # 从 HuggingFace Hub 加载 SST-2（GLUE 子集）
-        self.data = load_dataset("glue", "sst2", split=split)
+        # 为了快速演示和保证运行，截取 5% 的数据进行训练
+        self.data = load_dataset("glue", "sst2", split=f"{split}[:5%]")
         self.tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
         self.max_seq_len = config.max_seq_len
 

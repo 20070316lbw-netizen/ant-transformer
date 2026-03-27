@@ -1,0 +1,14 @@
+Loaded checkpoint: ant_best.pt
+Evaluating:   0%|          | 0/2 [00:00<?, ?it/s]/home/jules/.pyenv/versions/3.12.13/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1118: UserWarning: 'pin_memory' argument is set as true but no accelerator is found, then device pinned memory won't be used.
+  super().__init__(loader)
+Evaluating:  50%|█████     | 1/2 [00:00<00:00,  1.18it/s]Evaluating: 100%|██████████| 2/2 [00:01<00:00,  1.83it/s]Evaluating: 100%|██████████| 2/2 [00:01<00:00,  1.66it/s]
+Val Loss: 0.8240 | Val Acc: 0.5000
+
+Layer-wise mean gate values (CLS token):
+  (0 = 完全跳过当前层  |  1 = 完全激活当前层)
+  Layer 00: 0.5000  █████████
+  Layer 01: 0.4926  █████████
+  Layer 02: 0.5100  ██████████
+  Layer 03: 0.5130  ██████████
+  Layer 04: 0.5098  ██████████
+  Layer 05: 0.5013  ██████████
