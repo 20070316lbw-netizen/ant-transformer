@@ -79,7 +79,11 @@ class AntTransformer(nn.Module):
         self.config = config
 
         # ── 输入端 ──────────────────────────────────────────────
-        self.embedding = nn.Embedding(config.vocab_size, config.d_model, padding_idx=0)
+        if config.model_type == "financial":
+            self.input_proj = nn.Linear(config.input_dim, config.d_model)
+        else:
+            self.embedding = nn.Embedding(config.vocab_size, config.d_model, padding_idx=0)
+            
         self.pos_encoding = PositionalEncoding(config.d_model, config.max_seq_len, config.dropout)
         self.embed_norm = nn.LayerNorm(config.d_model)
         self.embed_drop = nn.Dropout(config.dropout)
@@ -112,9 +116,9 @@ class AntTransformer(nn.Module):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.Embedding):
+            elif isinstance(module, (nn.Embedding, nn.Linear)) and module == getattr(self, "embedding", None):
                 nn.init.normal_(module.weight, mean=0.0, std=0.02)
-                if module.padding_idx is not None:
+                if hasattr(module, "padding_idx") and module.padding_idx is not None:
                     module.weight.data[module.padding_idx].zero_()
 
     def forward(
@@ -136,8 +140,12 @@ class AntTransformer(nn.Module):
         if attention_mask is not None:
             key_padding_mask = attention_mask == 0  # [B, T]
 
-        # ① Embedding + 位置编码
-        x = self.embedding(input_ids)  # [B, T, D]
+        # ① Embedding / Projection + 位置编码
+        if self.config.model_type == "financial":
+            # input_ids 此时为 [B, T, D_in]
+            x = self.input_proj(input_ids)
+        else:
+            x = self.embedding(input_ids)  # [B, T, D]
         x = self.pos_encoding(x)
         x = self.embed_norm(x)
         x = self.embed_drop(x)

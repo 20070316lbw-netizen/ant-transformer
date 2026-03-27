@@ -2,7 +2,9 @@ from dataclasses import dataclass
 
 @dataclass
 class AntConfig:
-    # ── 模型维度 ────────────────────────────────────────────────
+    # ── 基本架构 ────────────────────────────────────────────────
+    model_type: str = "text"     # "text" | "financial"
+    input_dim: int = 6           # 仅用于 financial 模式
     vocab_size: int = 30522      # bert-base-uncased 词表大小
     max_seq_len: int = 128
     d_model: int = 256           # 隐层维度
