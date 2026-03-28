@@ -9,6 +9,7 @@ import argparse
 import yaml
 import pandas as pd
 import numpy as np
+import random
 from loguru import logger
 
 # 添加项目根目录
@@ -20,6 +21,14 @@ from data.data_prep import prepare_data
 from data.financial_dataset import FinancialDataset
 
 
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def train_one_epoch(
     model, loader, optimizer, criterion, device, gate_lambda, enable_pruning
 ):
@@ -29,7 +38,7 @@ def train_one_epoch(
         x = batch["x"].to(device)
         y = batch["y"].to(device)
         optimizer.zero_grad()
-        logits, _, all_gates = model(x)
+        logits, _, all_gates = model(x, enable_pruning=enable_pruning)
         task_loss = criterion(logits.squeeze(-1), y)
         gate_loss = torch.stack([g.abs().mean() for g in all_gates]).mean()
         loss = task_loss + gate_lambda * gate_loss
@@ -47,27 +56,16 @@ def get_predictions(model, loader, device, features, target):
     all_dates = []
     all_tickers = []
 
-    # 获取原始 dataframe 索引信息
-    df_raw = loader.dataset.df
-
-    for i, batch in enumerate(tqdm(loader, desc="  predicting", leave=False)):
+    for batch in tqdm(loader, desc="  predicting", leave=False):
         x = batch["x"].to(device)
-        y = batch["y"]
-        logits, _, _ = model(x)
+        y = batch["y"].cpu().numpy()
+        logits, _, _ = model(x, enable_pruning=model.config.enable_layer_pruning)
 
         # 记录预测
         all_preds.append(logits.squeeze(-1).cpu().numpy())
-        all_targets.append(y.numpy())
-
-        # 从 dataset 还原日期和代码
-        # 注意：dataset.__getitem__ 返回的是序列最后一个点的日期
-        batch_indices = range(
-            i * loader.batch_size, min((i + 1) * loader.batch_size, len(loader.dataset))
-        )
-        for idx in batch_indices:
-            row = df_raw.iloc[idx + loader.dataset.seq_len - 1]
-            all_dates.append(row["date"])
-            all_tickers.append(row["ticker"])
+        all_targets.append(y)
+        all_dates.extend(batch["date"])
+        all_tickers.extend(batch["ticker"])
 
     return pd.DataFrame(
         {
@@ -129,6 +127,7 @@ def main():
     config.validate()
 
     # 3. 设备配置
+    set_seed(getattr(config, "seed", 42))
     device = torch.device(
         "cuda" if config.use_cuda and torch.cuda.is_available() else "cpu"
     )
