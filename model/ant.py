@@ -134,6 +134,7 @@ class AntTransformer(nn.Module):
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor = None,
+        enable_pruning: bool | None = None,
     ) -> tuple[torch.Tensor, list, list]:
         """
         Args:
@@ -163,7 +164,11 @@ class AntTransformer(nn.Module):
         h_final, all_hiddens, all_gates = self.encoder(
             x,
             key_padding_mask=key_padding_mask,
-            enable_pruning=self.config.enable_layer_pruning,
+            enable_pruning=(
+                self.config.enable_layer_pruning
+                if enable_pruning is None
+                else enable_pruning
+            ),
         )
 
         # ③ [CLS] 池化（取第 0 个 token）
