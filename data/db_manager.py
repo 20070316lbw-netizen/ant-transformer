@@ -61,22 +61,25 @@ class QuantDBManager:
 
     def query_features(self, start_date, end_date, index_group=None):
         """查询因子截面"""
-        query = f"SELECT * FROM features_cn WHERE date BETWEEN '{start_date}' AND '{end_date}'"
         if index_group:
-            query += f" AND index_group = '{index_group}'"
-        
+            query = "SELECT * FROM features_cn WHERE date BETWEEN ? AND ? AND index_group = ?"
+            params = [start_date, end_date, index_group]
+        else:
+            query = "SELECT * FROM features_cn WHERE date BETWEEN ? AND ?"
+            params = [start_date, end_date]
+
         with self.get_connection() as conn:
-            return conn.execute(query).df()
+            return conn.execute(query, params).df()
 
     def query_sentiment(self, ticker, start_date, end_date):
         """查询特定股票在某时段的情感汇总"""
-        query = f"""
-            SELECT * FROM sentiment_daily 
-            WHERE ticker = '{ticker}' 
-            AND date BETWEEN '{start_date}' AND '{end_date}'
+        query = """
+            SELECT * FROM sentiment_daily
+            WHERE ticker = ?
+            AND date BETWEEN ? AND ?
         """
         with self.get_connection() as conn:
-            return conn.execute(query).df()
+            return conn.execute(query, [ticker, start_date, end_date]).df()
 
 if __name__ == "__main__":
     db = QuantDBManager()

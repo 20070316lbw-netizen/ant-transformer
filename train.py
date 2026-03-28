@@ -64,9 +64,10 @@ def train_one_epoch(
         total_correct   += (logits.argmax(dim=-1) == labels).sum().item()
         total_samples   += bs
 
-        # 累加 gate 值
+        # 累加 gate 值（取 CLS token，与 evaluate.py 口径一致）
+        # g: [B, T, D] → g[:, 0, :].mean() 代表 CLS token 的平均门控激活
         for i, g in enumerate(all_gates):
-            gate_sums[i] += g.mean().item()
+            gate_sums[i] += g[:, 0, :].mean().item()
         batch_count += 1
 
     avg_gates = [s / batch_count for s in gate_sums]

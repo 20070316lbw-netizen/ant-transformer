@@ -35,3 +35,21 @@ class AntConfig:
     checkpoint_path: str = "ant_best.pt"
     use_dummy_data: bool = False
     subset_size: int = None     # 可选：限制数据集大小以加速实验
+
+    def validate(self):
+        """执行硬性配置校验，避免静默错误"""
+        # 1. Attention 分头校验
+        if self.d_model % self.num_heads != 0:
+            raise ValueError(f"d_model({self.d_model}) 必须能被 num_heads({self.num_heads}) 整除")
+        if self.d_model % self.cross_layer_heads != 0:
+            raise ValueError(f"d_model({self.d_model}) 必须能被 cross_layer_heads({self.cross_layer_heads}) 整除")
+        
+        # 2. 模式校验
+        if self.model_type not in ["text", "financial"]:
+            raise ValueError(f"不支持的 model_type: {self.model_type}")
+            
+        # 3. 维度正数校验
+        if any(v <= 0 for v in [self.d_model, self.num_layers, self.num_heads, self.max_seq_len]):
+            raise ValueError("维度、层数、头数和序列长度必须为正数")
+
+        print(">>> [Config] 校验通过：架构参数合法。")

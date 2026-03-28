@@ -5,6 +5,7 @@ from torch.optim import AdamW
 from tqdm import tqdm
 import os
 import sys
+import numpy as np
 
 # 添加项目根目录
 sys.path.append(os.getcwd())
@@ -44,8 +45,9 @@ def train_one_epoch(model, loader, optimizer, criterion, device, gate_lambda):
         total_loss += task_loss.item() * x.size(0)
         total_gate_loss += gate_loss.item() * x.size(0)
         
+        # 取 token 维度均值（financial 模式无 CLS，直接对 T 维平均）
         for i, g in enumerate(all_gates):
-            gate_sums[i] += g.mean().item()
+            gate_sums[i] += g.mean(dim=(1, 2)).mean().item()
         batch_count += 1
         
     avg_gates = [s / batch_count for s in gate_sums]
@@ -73,27 +75,26 @@ def evaluate(model, loader, criterion, device):
     return mse, corr
 
 def main():
-    config = AntConfig(
-        model_type="financial",
-        input_dim=6,
-        num_classes=1, # Regression
-        max_seq_len=6,
-        d_model=64,
-        num_layers=4,
-        batch_size=64,
-        epochs=5,
-        lr=1e-3,
-        gate_lambda=0.08 # Slightly higher to see divergence faster
-    )
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
     # 1. 加载并清理数据
     train_df, val_df, test_df, features, target = prepare_data()
     
-    # 子集化以加速 demo
-    train_df = train_df.head(5000)
-    val_df = val_df.head(2000)
+    config = AntConfig(
+        model_type="financial",
+        input_dim=len(features), # 自动适配特征数
+        num_classes=1,           # Regression
+        max_seq_len=6,
+        d_model=64,
+        num_layers=4,
+        batch_size=512,          # 增大以适应全量数据
+        epochs=5,
+        lr=1e-3,
+        gate_lambda=0.08         # Slightly higher to see divergence faster
+    )
+    
+    # 执行配置校验
+    config.validate()
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # 2. 创建 Dataset/Loader
     train_ds = FinancialDataset(train_df, features, target, seq_len=config.max_seq_len)
@@ -125,5 +126,4 @@ def main():
         print("  Gate Values:", " | ".join([f"L{i}: {g:.4f}" for i, g in enumerate(avg_gates)]))
 
 if __name__ == "__main__":
-    import numpy as np
     main()

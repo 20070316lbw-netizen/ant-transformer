@@ -1,0 +1,15 @@
+>>> [Config] 校验通过：架构参数合法。
+Dataset created: Train=140638 samples, Val=35417 samples
+Model: AntTransformer (Financial Mode)
+Parameters: 699,777
+
+Epoch 01 | Train MSE: 0.080066 | Gate Loss: 0.3546 | Val MSE: 0.026586 | Val Corr: 0.0550
+  Gate Values: L0: 0.4991 | L1: 0.3021 | L2: 0.2889 | L3: 0.3278
+Epoch 02 | Train MSE: 0.044837 | Gate Loss: 0.1635 | Val MSE: 0.026837 | Val Corr: 0.0053
+  Gate Values: L0: 0.4967 | L1: 0.0609 | L2: 0.0581 | L3: 0.0381
+Epoch 03 | Train MSE: 0.043689 | Gate Loss: 0.1374 | Val MSE: 0.027136 | Val Corr: 0.0363
+  Gate Values: L0: 0.4926 | L1: 0.0265 | L2: 0.0242 | L3: 0.0064
+Epoch 04 | Train MSE: 0.043322 | Gate Loss: 0.1304 | Val MSE: 0.027405 | Val Corr: 0.0238
+  Gate Values: L0: 0.4867 | L1: 0.0171 | L2: 0.0168 | L3: 0.0010
+Epoch 05 | Train MSE: 0.043175 | Gate Loss: 0.1278 | Val MSE: 0.027404 | Val Corr: 0.0105
+  Gate Values: L0: 0.4792 | L1: 0.0158 | L2: 0.0159 | L3: 0.0002

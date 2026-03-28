@@ -116,9 +116,11 @@ class AntTransformer(nn.Module):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
-            elif isinstance(module, (nn.Embedding, nn.Linear)) and module == getattr(self, "embedding", None):
+            elif isinstance(module, nn.Embedding):
+                # 原代码的 isinstance 判断包含了 nn.Linear，导致条件永远不成立
+                # 现在直接匹配 nn.Embedding，无论 text 还是 financial 模式都安全
                 nn.init.normal_(module.weight, mean=0.0, std=0.02)
-                if hasattr(module, "padding_idx") and module.padding_idx is not None:
+                if module.padding_idx is not None:
                     module.weight.data[module.padding_idx].zero_()
 
     def forward(

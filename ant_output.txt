@@ -1,0 +1,14 @@
+Dataset created: Train=4345 samples, Val=1156 samples
+Model: AntTransformer (Financial Mode)
+Parameters: 699,777
+
+Epoch 01 | Train MSE: 0.169694 | Gate Loss: 0.4731 | Val MSE: 0.033077 | Val Corr: 0.0582
+  Gate Values: L0: 0.4995 | L1: 0.4805 | L2: 0.4851 | L3: 0.4272
+Epoch 02 | Train MSE: 0.033885 | Gate Loss: 0.4013 | Val MSE: 0.032556 | Val Corr: 0.0140
+  Gate Values: L0: 0.4991 | L1: 0.4230 | L2: 0.3235 | L3: 0.3592
+Epoch 03 | Train MSE: 0.033514 | Gate Loss: 0.3044 | Val MSE: 0.031553 | Val Corr: 0.0013
+  Gate Values: L0: 0.4987 | L1: 0.3261 | L2: 0.1397 | L3: 0.2530
+Epoch 04 | Train MSE: 0.033348 | Gate Loss: 0.2261 | Val MSE: 0.030956 | Val Corr: 0.0405
+  Gate Values: L0: 0.4981 | L1: 0.1726 | L2: 0.0690 | L3: 0.1644
+Epoch 05 | Train MSE: 0.032179 | Gate Loss: 0.1863 | Val MSE: 0.030892 | Val Corr: 0.0535
+  Gate Values: L0: 0.4975 | L1: 0.0788 | L2: 0.0567 | L3: 0.1123

@@ -7,7 +7,7 @@ class FinancialDataset(Dataset):
     将原始 DataFrame 转换为适合 Transformer 的序列数据。
     每个样本为 (seq_len, input_dim) 的特征矩阵和对应的标量 label。
     """
-    def __init__(self, df, feature_cols, target_col, seq_len=20):
+    def __init__(self, df, feature_cols, target_col, seq_len=6):
         self.seq_len = seq_len
         self.feature_cols = feature_cols
         self.target_col = target_col

@@ -38,7 +38,7 @@ def evaluate_with_gates(model, loader, criterion, device, collect_gates=False):
 
         if collect_gates:
             for i, g in enumerate(all_gates):
-                # g: [B, T, D] → 取 [CLS] token 的均值
+                # g: [B, T, D] → 取 [CLS] token 的均值，与 train.py 口径对齐
                 gate_stats[i].append(g[:, 0, :].mean().item())
 
     metrics = {
@@ -67,7 +67,7 @@ def main():
     _, val_loader = get_dataloaders(config)
 
     model = AntTransformer(config).to(device)
-    model.load_state_dict(torch.load(config.checkpoint_path, map_location=device))
+    model.load_state_dict(torch.load(config.checkpoint_path, map_location=device, weights_only=True))
     print(f"Loaded checkpoint: {config.checkpoint_path}")
 
     criterion = nn.CrossEntropyLoss()
