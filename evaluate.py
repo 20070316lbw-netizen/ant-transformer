@@ -1,89 +1,120 @@
-"""
-evaluate.py — 加载已训练模型，评估 + 分析门控行为
-
-用法：
-    python evaluate.py                        # 评估 val 集
-    python evaluate.py --analyze_gates        # 额外输出各层平均门控值
-"""
-
+import pandas as pd
+import numpy as np
+from loguru import logger
 import argparse
-import torch
-import torch.nn as nn
-from tqdm import tqdm
-
-from model.config import AntConfig
-from model.ant import AntTransformer
-from data.dataset import get_dataloaders
+import os
 
 
-@torch.no_grad()
-def evaluate_with_gates(model, loader, criterion, device, collect_gates=False):
-    model.eval()
-    total_loss = total_correct = total_samples = 0
-    # gate_stats[layer_idx] = list of mean gate values per batch
-    gate_stats = [[] for _ in range(model.config.num_layers)]
+def calculate_metrics(pred_path, verbose=True):
+    if not os.path.exists(pred_path):
+        logger.error(f"找不到预测文件: {pred_path}")
+        return None, None
 
-    for batch in tqdm(loader, desc="Evaluating"):
-        input_ids      = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        labels         = batch["label"].to(device)
+    logger.info(f"正在读取预测数据: {pred_path}")
+    df = pd.read_csv(pred_path)
+    df["date"] = pd.to_datetime(df["date"])
 
-        logits, _, all_gates = model(input_ids, attention_mask)
-        loss = criterion(logits, labels)
+    # 1. 计算分月 IC / Rank IC
+    def ic_group(group):
+        ic = group["target"].corr(group["pred"])
+        rank_ic = group["target"].corr(group["pred"], method="spearman")
+        return pd.Series({"IC": ic, "RankIC": rank_ic})
 
-        bs = labels.size(0)
-        total_loss    += loss.item() * bs
-        total_correct += (logits.argmax(dim=-1) == labels).sum().item()
-        total_samples += bs
+    monthly_metrics = df.groupby("date").apply(ic_group)
 
-        if collect_gates:
-            for i, g in enumerate(all_gates):
-                # g: [B, T, D] → 取 [CLS] token 的均值，与 train.py 口径对齐
-                gate_stats[i].append(g[:, 0, :].mean().item())
+    mean_ic = monthly_metrics["IC"].mean()
+    mean_rank_ic = monthly_metrics["RankIC"].mean()
+    ic_ir = mean_ic / monthly_metrics["IC"].std() if len(monthly_metrics) > 1 else 0
 
-    metrics = {
-        "loss": total_loss / total_samples,
-        "acc":  total_correct / total_samples,
-    }
-    if collect_gates:
-        metrics["gate_means"] = [
-            sum(vals) / len(vals) for vals in gate_stats
-        ]
-    return metrics
+    if verbose:
+        print("\n" + "=" * 60)
+        print("      预测性能评估记录 (Metrics Report)")
+        print("=" * 60)
+        print(f"数据范围: {df['date'].min().date()} 至 {df['date'].max().date()}")
+        print(f"总样本数: {len(df):,}")
+        print(f"分月均值 IC:     {mean_ic:.4f}")
+        print(f"分月均值 Rank IC: {mean_rank_ic:.4f}")
+        print(f"IC IR:           {ic_ir:.4f}")
+
+    # 2. 简单多头组合回测 (模拟 Top 50 股票)
+    # 假设每个月买入 pred 最高的 50 只，计算其次月 target (收益率) 的均值
+    TOP_N = 50
+
+    def top_n_ret(group):
+        top_group = group.nlargest(TOP_N, "pred")
+        return top_group["target"].mean()
+
+    portfolio_ret = df.groupby("date").apply(top_n_ret)
+    excess_ret = portfolio_ret - df.groupby("date")["target"].mean()  # 超额收益
+
+    ann_ret = excess_ret.mean() * 12
+    ann_vol = excess_ret.std() * np.sqrt(12)
+    sharpe = ann_ret / ann_vol if ann_vol > 0 else 0
+    max_dd = (excess_ret.cumsum() - excess_ret.cumsum().cummax()).min()
+
+    if verbose:
+        print("-" * 60)
+        print(f"多头组合 (Top {TOP_N}) 超额表现:")
+        print(f"年化超额收益: {ann_ret:.2%}")
+        print(f"年化超额波动: {ann_vol:.2%}")
+        print(f"超额 Sharpe:  {sharpe:.4f}")
+        print(f"超额 MaxDD:   {max_dd:.2%}")
+        print("=" * 60 + "\n")
+
+    return monthly_metrics, {"sharpe": sharpe, "max_dd": max_dd}
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint",    default=None)
-    parser.add_argument("--analyze_gates", action="store_true")
+    parser = argparse.ArgumentParser(description="Ant-Transformer 评估系统")
+    parser.add_argument(
+        "--pred_path", type=str, required=True, help="预测结果 CSV 路径"
+    )
+    parser.add_argument(
+        "--skip_monthly", action="store_true", help="跳过分月指标计算，只计算组合回测"
+    )
+    parser.add_argument(
+        "--skip_combination", action="store_true", help="跳过组合回测，只计算分月指标"
+    )
+    parser.add_argument(
+        "--top_n", type=int, default=50, help="组合回测时取前N个股票 (默认: 50)"
+    )
     args = parser.parse_args()
 
-    config = AntConfig()
-    if args.checkpoint:
-        config.checkpoint_path = args.checkpoint
+    # 计算所有指标
+    monthly_metrics = None
+    combination_result = None
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if not args.skip_monthly:
+        monthly_metrics, _ = calculate_metrics(args.pred_path, verbose=True)
+    else:
+        _, combination_result = calculate_metrics(args.pred_path, verbose=False)
 
-    _, val_loader = get_dataloaders(config)
+    if not args.skip_combination:
+        df = pd.read_csv(args.pred_path)
+        df["date"] = pd.to_datetime(df["date"])
 
-    model = AntTransformer(config).to(device)
-    model.load_state_dict(torch.load(config.checkpoint_path, map_location=device, weights_only=True))
-    print(f"Loaded checkpoint: {config.checkpoint_path}")
+        TOP_N = args.top_n
 
-    criterion = nn.CrossEntropyLoss()
-    metrics = evaluate_with_gates(
-        model, val_loader, criterion, device,
-        collect_gates=args.analyze_gates,
-    )
+        def top_n_ret(group):
+            top_group = group.nlargest(TOP_N, "pred")
+            return top_group["target"].mean()
 
-    print(f"Val Loss: {metrics['loss']:.4f} | Val Acc: {metrics['acc']:.4f}")
+        portfolio_ret = df.groupby("date").apply(top_n_ret)
+        excess_ret = portfolio_ret - df.groupby("date")["target"].mean()
 
-    if args.analyze_gates:
-        print("\nLayer-wise mean gate values (CLS token):")
-        print("  (0 = 完全跳过当前层  |  1 = 完全激活当前层)")
-        for i, g_mean in enumerate(metrics["gate_means"]):
-            bar = "█" * int(g_mean * 20)
-            print(f"  Layer {i:02d}: {g_mean:.4f}  {bar}")
+        ann_ret = excess_ret.mean() * 12
+        ann_vol = excess_ret.std() * np.sqrt(12)
+        sharpe = ann_ret / ann_vol if ann_vol > 0 else 0
+        max_dd = (excess_ret.cumsum() - excess_ret.cumsum().cummax()).min()
+
+        if combination_result:
+            combination_result["sharpe"] = sharpe
+            combination_result["max_dd"] = max_dd
+        else:
+            combination_result = {"sharpe": sharpe, "max_dd": max_dd}
+
+    if verbose and not args.skip_monthly and not args.skip_combination:
+        logger.success("评估完成！")
 
 
 if __name__ == "__main__":

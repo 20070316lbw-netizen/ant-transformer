@@ -1,0 +1,79 @@
+# Ant-Transformer Configuration File
+# 说明：所有实验参数都应在这里配置，不要直接修改代码
+
+model:
+  # 模型架构：full | layer0_layer2 | layer0
+  arch: "full"
+
+  # 模型维度配置
+  d_model: 256
+  num_heads: 8
+  d_ff: 1024
+  cross_layer_heads: 4
+  gate_hidden_dim: 64
+
+  # 输入维度
+  input_dim: 6  # 对应特征列数量
+
+# 数据配置
+data:
+  # 特征列名
+  features: ["mom_20d", "mom_60d", "mom_12m_minus_1m", "vol_60d_res", "sp_ratio", "turn_20d"]
+
+  # 目标列
+  target: "label_next_month"
+
+  # 序列长度
+  seq_len: 6
+
+  # 数据集切分时间点
+  train_end: "2023-12-31"
+  val_end: "2024-12-31"
+
+# 训练配置
+training:
+  # 训练轮数
+  epochs: 30
+
+  # 批次大小
+  batch_size: 1024
+
+  # 学习率
+  lr: 0.001
+
+  # 门控正则化权重 (L1)
+  gate_lambda: 0.08
+
+  # 梯度裁剪阈值
+  max_grad_norm: 1.0
+
+  # Dropout 概率
+  dropout: 0.1
+
+  # Warmup 步数
+  warmup_steps: 500
+
+# 实验控制
+experiment:
+  # 是否启用层裁剪功能
+  # True: 训练时会使用历史门控来自适应裁剪层
+  # False: 所有层都会完整执行
+  enable_layer_pruning: true
+
+  # 是否使用数据子集进行快速测试 (仅在开发调试时使用)
+  use_subset: false
+  subset_size: null  # 如果 use_subset=true，设置为样本数量，例如 10000
+
+  # 输出路径前缀
+  output_prefix: "outputs"
+
+# 高级选项
+advanced:
+  # 是否保存所有层的隐状态和门控值 (用于分析)
+  save_all_hiddens: false
+
+  # 是否使用 CUDA
+  use_cuda: true
+
+  # 数据加载工作线程数
+  num_workers: 0

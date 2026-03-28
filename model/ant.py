@@ -49,9 +49,12 @@ class PositionalEncoding(nn.Module):
 
         # 构造 PE 矩阵 [max_seq_len, d_model]
         pe = torch.zeros(max_seq_len, d_model)
-        position = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)  # [T, 1]
+        position = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(
+            1
+        )  # [T, 1]
         div_term = torch.exp(
-            torch.arange(0, d_model, 2, dtype=torch.float) * (-math.log(10000.0) / d_model)
+            torch.arange(0, d_model, 2, dtype=torch.float)
+            * (-math.log(10000.0) / d_model)
         )  # [D/2]
 
         pe[:, 0::2] = torch.sin(position * div_term)  # 偶数维
@@ -82,21 +85,25 @@ class AntTransformer(nn.Module):
         if config.model_type == "financial":
             self.input_proj = nn.Linear(config.input_dim, config.d_model)
         else:
-            self.embedding = nn.Embedding(config.vocab_size, config.d_model, padding_idx=0)
-            
-        self.pos_encoding = PositionalEncoding(config.d_model, config.max_seq_len, config.dropout)
+            self.embedding = nn.Embedding(
+                config.vocab_size, config.d_model, padding_idx=0
+            )
+
+        self.pos_encoding = PositionalEncoding(
+            config.d_model, config.max_seq_len, config.dropout
+        )
         self.embed_norm = nn.LayerNorm(config.d_model)
         self.embed_drop = nn.Dropout(config.dropout)
 
         # ── 编码器 ──────────────────────────────────────────────
         self.encoder = AntEncoder(
-            num_layers        = config.num_layers,
-            d_model           = config.d_model,
-            num_heads         = config.num_heads,
-            cross_layer_heads = config.cross_layer_heads,
-            d_ff              = config.d_ff,
-            gate_hidden_dim   = config.gate_hidden_dim,
-            dropout           = config.dropout,
+            num_layers=config.num_layers,
+            d_model=config.d_model,
+            num_heads=config.num_heads,
+            cross_layer_heads=config.cross_layer_heads,
+            d_ff=config.d_ff,
+            gate_hidden_dim=config.gate_hidden_dim,
+            dropout=config.dropout,
         )
 
         # ── 分类头 ──────────────────────────────────────────────
@@ -154,7 +161,9 @@ class AntTransformer(nn.Module):
 
         # ② 编码
         h_final, all_hiddens, all_gates = self.encoder(
-            x, key_padding_mask=key_padding_mask
+            x,
+            key_padding_mask=key_padding_mask,
+            enable_pruning=self.config.enable_layer_pruning,
         )
 
         # ③ [CLS] 池化（取第 0 个 token）

@@ -6,3 +6,7 @@ lightgbm
 xgboost
 catboost
 pyyaml
+loguru
+duckdb
+pandas
+matplotlib

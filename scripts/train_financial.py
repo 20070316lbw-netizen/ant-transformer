@@ -85,7 +85,7 @@ def main():
         max_seq_len=6,
         d_model=64,
         num_layers=4,
-        batch_size=512,          # 增大以适应全量数据
+        batch_size=1024,         # 进一步增大 batch 以压榨 CPU 性能
         epochs=5,
         lr=1e-3,
         gate_lambda=0.08         # Slightly higher to see divergence faster
@@ -106,11 +106,22 @@ def main():
         print("Warning: Validation dataset is empty! Check your seq_len and date range.")
         return
         
-    train_loader = DataLoader(train_ds, batch_size=config.batch_size, shuffle=True)
-    val_loader   = DataLoader(val_ds, batch_size=config.batch_size, shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=config.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader   = DataLoader(val_ds, batch_size=config.batch_size, shuffle=False, num_workers=4, pin_memory=True)
     
     # 3. 初始化模型
     model = AntTransformer(config).to(device)
+    
+    # 尝试使用 torch.compile 提速 (PyTorch 2.0+)
+    if hasattr(torch, "compile") and sys.platform != "win32":
+        try:
+            model = torch.compile(model)
+            print(">>> [Speedup] torch.compile 开启成功。")
+        except Exception as e:
+            print(f">>> [Speedup] torch.compile 开启失败: {e}")
+    else:
+        print(">>> [Speedup] 当前环境跳过 torch.compile (Windows 或低版本 PyTorch)。")
+
     print(f"Model: AntTransformer (Financial Mode)")
     print(f"Parameters: {model.count_parameters():,}\n")
     

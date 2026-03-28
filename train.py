@@ -1,188 +1,195 @@
-"""
-train.py — 小蚂蚁训练入口
-
-用法：
-    python train.py             # 使用默认 config
-    python train.py --epochs 5   # 覆盖部分超参
-"""
-
-import argparse
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import OneCycleLR
 from tqdm import tqdm
+import os
+import sys
+import argparse
+import yaml
+import pandas as pd
+import numpy as np
+from loguru import logger
+
+# 添加项目根目录
+sys.path.append(os.getcwd())
 
 from model.config import AntConfig
 from model.ant import AntTransformer
-from data.dataset import get_dataloaders
+from data.data_prep import prepare_data
+from data.financial_dataset import FinancialDataset
 
 
-# ─────────────────────────────────────────────────────────────
-# 单 epoch 训练
-# ─────────────────────────────────────────────────────────────
 def train_one_epoch(
-    model: AntTransformer,
-    loader,
-    optimizer,
-    scheduler,
-    criterion,
-    device: torch.device,
-    max_grad_norm: float,
-    gate_lambda: float = 0.0,
-) -> tuple[float, float, float, list[float]]:
+    model, loader, optimizer, criterion, device, gate_lambda, enable_pruning
+):
     model.train()
-    total_loss = total_correct = total_samples = total_gate_loss = 0
-    # 用于记录每层 gate 的累加值和数量
-    gate_sums = [0.0] * model.config.num_layers
-    batch_count = 0
-
+    total_loss = 0
     for batch in tqdm(loader, desc="  train", leave=False):
-        input_ids      = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        labels         = batch["label"].to(device)
-
+        x = batch["x"].to(device)
+        y = batch["y"].to(device)
         optimizer.zero_grad()
-        logits, _, all_gates = model(input_ids, attention_mask)
-        
-        # ① 原生任务 Loss
-        task_loss = criterion(logits, labels)
-        
-        # ② 门控正则 Loss (L1 鼓励稀疏，即 gate -> 0，跳过层)
+        logits, _, all_gates = model(x)
+        task_loss = criterion(logits.squeeze(-1), y)
         gate_loss = torch.stack([g.abs().mean() for g in all_gates]).mean()
-        
         loss = task_loss + gate_lambda * gate_loss
         loss.backward()
-
-        nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
         optimizer.step()
-        scheduler.step()
-
-        bs = labels.size(0)
-        total_loss      += loss.item() * bs
-        total_gate_loss += gate_loss.item() * bs
-        total_correct   += (logits.argmax(dim=-1) == labels).sum().item()
-        total_samples   += bs
-
-        # 累加 gate 值（取 CLS token，与 evaluate.py 口径一致）
-        # g: [B, T, D] → g[:, 0, :].mean() 代表 CLS token 的平均门控激活
-        for i, g in enumerate(all_gates):
-            gate_sums[i] += g[:, 0, :].mean().item()
-        batch_count += 1
-
-    avg_gates = [s / batch_count for s in gate_sums]
-    return total_loss / total_samples, total_gate_loss / total_samples, total_correct / total_samples, avg_gates
+        total_loss += task_loss.item() * x.size(0)
+    return total_loss / len(loader.dataset)
 
 
-# ─────────────────────────────────────────────────────────────
-# 评估
-# ─────────────────────────────────────────────────────────────
 @torch.no_grad()
-def evaluate(
-    model: AntTransformer,
-    loader,
-    criterion,
-    device: torch.device,
-) -> tuple[float, float]:
+def get_predictions(model, loader, device, features, target):
     model.eval()
-    total_loss = total_correct = total_samples = 0
+    all_preds = []
+    all_targets = []
+    all_dates = []
+    all_tickers = []
 
-    for batch in tqdm(loader, desc="  eval ", leave=False):
-        input_ids      = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        labels         = batch["label"].to(device)
+    # 获取原始 dataframe 索引信息
+    df_raw = loader.dataset.df
 
-        logits, _, _ = model(input_ids, attention_mask)
-        loss = criterion(logits, labels)
+    for i, batch in enumerate(tqdm(loader, desc="  predicting", leave=False)):
+        x = batch["x"].to(device)
+        y = batch["y"]
+        logits, _, _ = model(x)
 
-        bs = labels.size(0)
-        total_loss    += loss.item() * bs
-        total_correct += (logits.argmax(dim=-1) == labels).sum().item()
-        total_samples += bs
+        # 记录预测
+        all_preds.append(logits.squeeze(-1).cpu().numpy())
+        all_targets.append(y.numpy())
 
-    return total_loss / total_samples, total_correct / total_samples
+        # 从 dataset 还原日期和代码
+        # 注意：dataset.__getitem__ 返回的是序列最后一个点的日期
+        batch_indices = range(
+            i * loader.batch_size, min((i + 1) * loader.batch_size, len(loader.dataset))
+        )
+        for idx in batch_indices:
+            row = df_raw.iloc[idx + loader.dataset.seq_len - 1]
+            all_dates.append(row["date"])
+            all_tickers.append(row["ticker"])
 
-
-# ─────────────────────────────────────────────────────────────
-# 主流程
-# ─────────────────────────────────────────────────────────────
-def main(config: AntConfig):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}\n")
-
-    # 数据
-    train_loader, val_loader = get_dataloaders(config)
-
-    # 模型
-    model = AntTransformer(config).to(device)
-    print(f"Parameters: {model.count_parameters():,}")
-    print(f"Layers: {config.num_layers}")
-    print(f"d_model: {config.d_model}\n")
-
-    # 优化器 + 学习率调度
-    optimizer = AdamW(model.parameters(), lr=config.lr, weight_decay=0.01)
-    
-    total_steps = len(train_loader) * config.epochs
-    pct_start = min(config.warmup_steps / total_steps, 0.99) if total_steps > 0 else 0.3
-    
-    scheduler = OneCycleLR(
-        optimizer,
-        max_lr=config.lr,
-        total_steps=total_steps,
-        pct_start=pct_start,
-        anneal_strategy="cos",
+    return pd.DataFrame(
+        {
+            "ticker": all_tickers,
+            "date": all_dates,
+            "target": np.concatenate(all_targets),
+            "pred": np.concatenate(all_preds),
+        }
     )
 
-    criterion = nn.CrossEntropyLoss()
 
-    # 训练循环
-    best_val_acc = 0.0
-    for epoch in range(1, config.epochs + 1):
-        print(f"Epoch {epoch:02d}/{config.epochs}")
-
-        train_loss, train_gate_loss, train_acc, avg_gates = train_one_epoch(
-            model, train_loader, optimizer, scheduler, criterion, device, config.max_grad_norm, config.gate_lambda
-        )
-        val_loss, val_acc = evaluate(model, val_loader, criterion, device)
-
-        print(
-            f"  Train loss={train_loss:.4f} (gate={train_gate_loss:.4f}) acc={train_acc:.4f}\n"
-            f"  Val   loss={val_loss:.4f} acc={val_acc:.4f}"
-        )
-
-        # 输出每层 Gate 平均值
-        print("  Gate Monitoring (Average per Layer):")
-        for i, g in enumerate(avg_gates):
-            print(f"    Layer {i+1}: {g:.4f}")
-
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save(model.state_dict(), config.checkpoint_path)
-            print(f"  [OK] Saved best (val_acc={val_acc:.4f})")
-        print()
-
-    print(f"Training done. Best val acc: {best_val_acc:.4f}")
-
-
-# ─────────────────────────────────────────────────────────────
-# CLI
-# ─────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train AntTransformer")
-    parser.add_argument("--epochs",     type=int,   default=None)
-    parser.add_argument("--lr",         type=float, default=None)
-    parser.add_argument("--batch_size", type=int,   default=None)
-    parser.add_argument("--d_model",    type=int,   default=None)
-    parser.add_argument("--num_layers", type=int,   default=None)
-    parser.add_argument("--use_dummy_data", action="store_true")
-    parser.add_argument("--subset_size", type=int,   default=None)
-    parser.add_argument("--max_seq_len", type=int,   default=None)
+def main():
+    parser = argparse.ArgumentParser(description="Ant-Transformer 统一训练入口")
+    parser.add_argument(
+        "--config", type=str, default="config.yaml", help="配置文件路径 (config.yaml)"
+    )
+    parser.add_argument(
+        "--model_arch",
+        type=str,
+        default=None,
+        choices=["full", "layer0_layer2", "layer0"],
+        help="覆盖配置文件中的模型架构",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=None, help="覆盖配置文件中的训练轮数"
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=None, help="覆盖配置文件中的批次大小"
+    )
+    parser.add_argument("--lr", type=float, default=None, help="覆盖配置文件中的学习率")
+    parser.add_argument(
+        "--gate_lambda", type=float, default=None, help="覆盖配置文件中的门控正则化权重"
+    )
+    parser.add_argument(
+        "--subset", type=int, default=None, help="仅用于快速测试的样本数"
+    )
+    parser.add_argument("--no_pruning", action="store_true", help="禁用层裁剪功能")
     args = parser.parse_args()
 
-    cfg = AntConfig()
-    # 覆盖指定参数
-    for k, v in vars(args).items():
-        if v is not None:
-            setattr(cfg, k, v)
+    # 1. 加载配置文件
+    logger.info(f"正在加载配置文件: {args.config}")
+    config = AntConfig.load_from_yaml(args.config)
 
-    main(cfg)
+    # 2. 命令行参数覆盖
+    if args.model_arch:
+        config.model_arch = args.model_arch
+        config.update_by_arch()
+    if args.epochs:
+        config.epochs = args.epochs
+    if args.batch_size:
+        config.batch_size = args.batch_size
+    if args.lr:
+        config.lr = args.lr
+    if args.gate_lambda:
+        config.gate_lambda = args.gate_lambda
+    if args.no_pruning:
+        config.enable_layer_pruning = False
+
+    config.validate()
+
+    # 3. 设备配置
+    device = torch.device(
+        "cuda" if config.use_cuda and torch.cuda.is_available() else "cpu"
+    )
+    if not config.use_cuda:
+        device = torch.device("cpu")
+    logger.info(f"使用设备: {device}")
+
+    # 4. 数据准备
+    train_df, val_df, test_df, features, target_col = prepare_data(
+        train_end=config.train_end, val_end=config.val_end
+    )
+
+    if config.use_subset and config.subset_size:
+        logger.info(f"使用数据子集，大小: {config.subset_size}")
+        train_df = train_df.head(config.subset_size)
+        val_df = val_df.head(config.subset_size // 2)
+
+    train_ds = FinancialDataset(train_df, features, target_col, seq_len=config.seq_len)
+    val_ds = FinancialDataset(val_df, features, target_col, seq_len=config.seq_len)
+    config.input_dim = len(features)
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=config.batch_size,
+        shuffle=True,
+        num_workers=config.num_workers,
+    )
+    val_loader = DataLoader(val_ds, batch_size=config.batch_size, shuffle=False)
+
+    # 5. 模型
+    logger.info(
+        f"初始化模型: {config.model_arch} (num_layers={config.num_layers}, pruning={config.enable_layer_pruning})"
+    )
+    model = AntTransformer(config).to(device)
+    optimizer = AdamW(model.parameters(), lr=config.lr)
+    criterion = nn.MSELoss()
+
+    # 6. 训练
+    for epoch in range(1, config.epochs + 1):
+        loss = train_one_epoch(
+            model,
+            train_loader,
+            optimizer,
+            criterion,
+            device,
+            config.gate_lambda,
+            config.enable_layer_pruning,
+        )
+        logger.info(f"Epoch {epoch:02d} | Loss: {loss:.6f}")
+
+    # 7. 生成预测并保存
+    logger.info("正在生成验证集预测结果...")
+    pred_df = get_predictions(model, val_loader, device, features, target_col)
+
+    os.makedirs(config.output_prefix, exist_ok=True)
+    out_path = f"{config.output_prefix}/pred_{config.model_arch}.csv"
+    pred_df.to_csv(out_path, index=False)
+
+    logger.success(f"实验结束！预测结果已保存至: {out_path}")
+    print(f"\n>>> 请运行: python evaluate.py --pred_path {out_path}")
+
+
+if __name__ == "__main__":
+    main()

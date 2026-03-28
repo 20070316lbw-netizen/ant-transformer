@@ -16,7 +16,6 @@ from .layer import AntLayer
 
 
 class AntEncoder(nn.Module):
-
     def __init__(
         self,
         num_layers: int,
@@ -28,31 +27,47 @@ class AntEncoder(nn.Module):
         dropout: float = 0.1,
     ):
         super().__init__()
-        self.layers = nn.ModuleList([
-            AntLayer(d_model, num_heads, cross_layer_heads, d_ff, gate_hidden_dim, dropout)
-            for _ in range(num_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                AntLayer(
+                    d_model,
+                    num_heads,
+                    cross_layer_heads,
+                    d_ff,
+                    gate_hidden_dim,
+                    dropout,
+                )
+                for _ in range(num_layers)
+            ]
+        )
 
     def forward(
         self,
         x: torch.Tensor,
         key_padding_mask: torch.Tensor = None,
+        enable_pruning: bool = True,
     ) -> tuple[torch.Tensor, list, list]:
         """
         Args:
             x:                [B, T, D] 嵌入后的输入
             key_padding_mask: [B, T] True = padding
+            enable_pruning:   bool  是否启用层裁剪功能
         Returns:
             h_final:     [B, T, D] 最后一层输出
             all_hiddens: List[[B,T,D]] 所有层输出（供分析）
             all_gates:   List[[B,T,D]] 所有门控值（供分析）
         """
         all_hiddens: list[torch.Tensor] = []
-        all_gates:   list[torch.Tensor] = []
+        all_gates: list[torch.Tensor] = []
 
         h = x
         for layer in self.layers:
-            h, gate_val = layer(h, all_hiddens, key_padding_mask=key_padding_mask)
+            h, gate_val = layer(
+                h,
+                all_hiddens,
+                key_padding_mask=key_padding_mask,
+                enable_pruning=enable_pruning,
+            )
             all_hiddens.append(h)
             all_gates.append(gate_val)
 

@@ -1,0 +1,37 @@
+# Experiment 4: No Pruning
+# 完整4层 Transformer，但禁用门控机制，所有层都执行
+model:
+  arch: "full"
+  d_model: 256
+  num_heads: 8
+  d_ff: 1024
+  cross_layer_heads: 4
+  gate_hidden_dim: 64
+  input_dim: 6
+
+data:
+  features: ["mom_20d", "mom_60d", "mom_12m_minus_1m", "vol_60d_res", "sp_ratio", "turn_20d"]
+  target: "label_next_month"
+  seq_len: 6
+  train_end: "2023-12-31"
+  val_end: "2024-12-31"
+
+training:
+  epochs: 30
+  batch_size: 1024
+  lr: 0.001
+  gate_lambda: 0.08
+  max_grad_norm: 1.0
+  dropout: 0.1
+  warmup_steps: 500
+
+experiment:
+  use_subset: false
+  subset_size: null
+  output_prefix: "outputs"
+
+advanced:
+  use_cuda: true
+  num_workers: 0
+  save_all_hiddens: false
+  enable_layer_pruning: false
