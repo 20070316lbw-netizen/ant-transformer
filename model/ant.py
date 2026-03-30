@@ -104,6 +104,9 @@ class AntTransformer(nn.Module):
             d_ff=config.d_ff,
             gate_hidden_dim=config.gate_hidden_dim,
             dropout=config.dropout,
+            use_grouped_freq_attention=config.use_grouped_freq_attention,
+            num_head_groups=config.num_head_groups,
+            group_mix_coeff=config.group_mix_coeff,
         )
 
         # ── 分类头 ──────────────────────────────────────────────

@@ -25,6 +25,9 @@ class AntEncoder(nn.Module):
         d_ff: int,
         gate_hidden_dim: int,
         dropout: float = 0.1,
+        use_grouped_freq_attention: bool = False,
+        num_head_groups: int = 4,
+        group_mix_coeff: float = 0.1,
     ):
         super().__init__()
         self.layers = nn.ModuleList(
@@ -36,6 +39,9 @@ class AntEncoder(nn.Module):
                     d_ff,
                     gate_hidden_dim,
                     dropout,
+                    use_grouped_freq_attention,
+                    num_head_groups,
+                    group_mix_coeff,
                 )
                 for _ in range(num_layers)
             ]
