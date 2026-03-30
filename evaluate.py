@@ -36,29 +36,37 @@ def calculate_metrics(pred_path, verbose=True):
         print(f"分月均值 Rank IC: {mean_rank_ic:.4f}")
         print(f"IC IR:           {ic_ir:.4f}")
 
-    # 2. 简单多头组合回测 (模拟 Top 50 股票)
-    # 假设每个月买入 pred 最高的 50 只，计算其次月 target (收益率) 的均值
-    TOP_N = 50
+    # 2. 多空组合回测 (Long-Short Strategy)
+    # 多头 (Long): 前 20% | 空头 (Short): 后 20%
+    def ls_strategy_ret(group):
+        n_20 = max(1, int(len(group) * 0.2))
+        if n_20 == 0: return pd.Series({"long": 0, "short": 0, "ls": 0})
+        long_group = group.nlargest(n_20, "pred")
+        short_group = group.nsmallest(n_20, "pred")
+        
+        l_ret = long_group["target"].mean()
+        s_ret = short_group["target"].mean()
+        return pd.Series({"long": l_ret, "short": s_ret, "ls": l_ret - s_ret})
 
-    def top_n_ret(group):
-        top_group = group.nlargest(TOP_N, "pred")
-        return top_group["target"].mean()
-
-    portfolio_ret = df.groupby("date").apply(top_n_ret)
-    excess_ret = portfolio_ret - df.groupby("date")["target"].mean()  # 超额收益
-
-    ann_ret = excess_ret.mean() * 12
-    ann_vol = excess_ret.std() * np.sqrt(12)
+    strat_rets = df.groupby("date").apply(ls_strategy_ret)
+    
+    # 计算多空组合指标
+    ls_ret = strat_rets["ls"]
+    ann_ret = ls_ret.mean() * 12
+    ann_vol = ls_ret.std() * np.sqrt(12)
     sharpe = ann_ret / ann_vol if ann_vol > 0 else 0
-    max_dd = (excess_ret.cumsum() - excess_ret.cumsum().cummax()).min()
+    
+    # 最大回撤 (基于净值算)
+    cum_val = (1 + ls_ret).cumprod()
+    max_dd = (cum_val / cum_val.cummax() - 1).min()
 
     if verbose:
         print("-" * 60)
-        print(f"多头组合 (Top {TOP_N}) 超额表现:")
-        print(f"年化超额收益: {ann_ret:.2%}")
-        print(f"年化超额波动: {ann_vol:.2%}")
-        print(f"超额 Sharpe:  {sharpe:.4f}")
-        print(f"超额 MaxDD:   {max_dd:.2%}")
+        print(f"多空对冲组合 (Top 20% vs Bottom 20%) 表现:")
+        print(f"年化多空收益: {ann_ret:.2%}")
+        print(f"年化多空波动: {ann_vol:.2%}")
+        print(f"多空 Sharpe:  {sharpe:.4f}")
+        print(f"多空 MaxDD:   {max_dd:.2%}")
         print("=" * 60 + "\n")
 
     return monthly_metrics, {"sharpe": sharpe, "max_dd": max_dd}
@@ -81,37 +89,7 @@ def main():
     args = parser.parse_args()
 
     # 计算所有指标
-    monthly_metrics = None
-    combination_result = None
-
-    if not args.skip_monthly:
-        monthly_metrics, _ = calculate_metrics(args.pred_path, verbose=True)
-    else:
-        _, combination_result = calculate_metrics(args.pred_path, verbose=False)
-
-    if not args.skip_combination:
-        df = pd.read_csv(args.pred_path)
-        df["date"] = pd.to_datetime(df["date"])
-
-        TOP_N = args.top_n
-
-        def top_n_ret(group):
-            top_group = group.nlargest(TOP_N, "pred")
-            return top_group["target"].mean()
-
-        portfolio_ret = df.groupby("date").apply(top_n_ret)
-        excess_ret = portfolio_ret - df.groupby("date")["target"].mean()
-
-        ann_ret = excess_ret.mean() * 12
-        ann_vol = excess_ret.std() * np.sqrt(12)
-        sharpe = ann_ret / ann_vol if ann_vol > 0 else 0
-        max_dd = (excess_ret.cumsum() - excess_ret.cumsum().cummax()).min()
-
-        if combination_result:
-            combination_result["sharpe"] = sharpe
-            combination_result["max_dd"] = max_dd
-        else:
-            combination_result = {"sharpe": sharpe, "max_dd": max_dd}
+    calculate_metrics(args.pred_path, verbose=True)
 
     if not args.skip_monthly and not args.skip_combination:
         logger.success("评估完成！")

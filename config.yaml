@@ -2,8 +2,14 @@
 # 说明：所有实验参数都应在这里配置，不要直接修改代码
 
 model:
+  # 模型类型：text | financial
+  model_type: "financial"
+
   # 模型架构：full | layer0_layer2 | layer0
   arch: "full"
+
+  # 输出维度 (回归任务通常为 1)
+  num_classes: 1
 
   # 模型维度配置
   d_model: 256

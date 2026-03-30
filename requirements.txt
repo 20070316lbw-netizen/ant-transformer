@@ -9,4 +9,5 @@ pyyaml
 loguru
 duckdb
 pandas
+scipy
 matplotlib
