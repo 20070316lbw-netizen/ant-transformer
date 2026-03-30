@@ -59,9 +59,19 @@ class AntLayer(nn.Module):
         d_ff: int,
         gate_hidden_dim: int,
         dropout: float = 0.1,
+        use_grouped_freq_attention: bool = False,
+        num_head_groups: int = 4,
+        group_mix_coeff: float = 0.1,
     ):
         super().__init__()
-        self.self_attn = StandardSelfAttention(d_model, num_heads, dropout)
+        self.self_attn = StandardSelfAttention(
+            d_model,
+            num_heads,
+            dropout,
+            use_grouped_freq_attention=use_grouped_freq_attention,
+            num_head_groups=num_head_groups,
+            group_mix_coeff=group_mix_coeff,
+        )
         self.cross_attn = CrossLayerAttention(d_model, cross_layer_heads, dropout)
         self.combine_norm = nn.LayerNorm(d_model)
         self.ffn = FeedForward(d_model, d_ff, dropout)

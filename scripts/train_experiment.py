@@ -20,6 +20,7 @@ import pandas as pd
 from scipy.stats import spearmanr
 import sys
 import os
+import random
 
 sys.path.append(os.getcwd())
 
@@ -29,6 +30,14 @@ from model.encoder import AntEncoder
 from model.layer import AntLayer
 from data.data_prep import prepare_data
 from data.financial_dataset import FinancialDataset
+
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def collate_fn(batch):
@@ -54,6 +63,9 @@ def create_model_a(config):
         d_ff=config.d_ff,
         gate_hidden_dim=config.gate_hidden_dim,
         dropout=config.dropout,
+        use_grouped_freq_attention=config.use_grouped_freq_attention,
+        num_head_groups=config.num_head_groups,
+        group_mix_coeff=config.group_mix_coeff,
         batch_size=config.batch_size,
         lr=config.lr,
         epochs=config.epochs,
@@ -62,24 +74,61 @@ def create_model_a(config):
 
 
 def create_model_b(config):
-    """模型B: Layer0 + 新Layer (重新初始化)"""
+    """模型B: Layer0 + Layer2（剪枝后保留两层）"""
 
-    class TwoLayerEncoder(AntEncoder):
+    class Layer0Layer2Encoder(nn.Module):
         def __init__(self, cfg):
-            super().__init__(
-                num_layers=2,
-                d_model=cfg.d_model,
-                num_heads=cfg.num_heads,
-                cross_layer_heads=cfg.cross_layer_heads,
-                d_ff=cfg.d_ff,
-                gate_hidden_dim=cfg.gate_hidden_dim,
-                dropout=cfg.dropout,
+            super().__init__()
+            self.layer0 = AntLayer(
+                cfg.d_model,
+                cfg.num_heads,
+                cfg.cross_layer_heads,
+                cfg.d_ff,
+                cfg.gate_hidden_dim,
+                cfg.dropout,
+                cfg.use_grouped_freq_attention,
+                cfg.num_head_groups,
+                cfg.group_mix_coeff,
             )
+            self.layer2 = AntLayer(
+                cfg.d_model,
+                cfg.num_heads,
+                cfg.cross_layer_heads,
+                cfg.d_ff,
+                cfg.gate_hidden_dim,
+                cfg.dropout,
+                cfg.use_grouped_freq_attention,
+                cfg.num_head_groups,
+                cfg.group_mix_coeff,
+            )
+
+        def forward(self, x, key_padding_mask=None, enable_pruning=True):
+            all_hiddens = []
+            all_gates = []
+
+            h, gate0 = self.layer0(
+                x,
+                all_hiddens,
+                key_padding_mask=key_padding_mask,
+                enable_pruning=enable_pruning,
+            )
+            all_hiddens.append(h)
+            all_gates.append(gate0)
+
+            h, gate2 = self.layer2(
+                h,
+                all_hiddens,
+                key_padding_mask=key_padding_mask,
+                enable_pruning=enable_pruning,
+            )
+            all_hiddens.append(h)
+            all_gates.append(gate2)
+            return h, all_hiddens, all_gates
 
     class TwoLayerTransformer(AntTransformer):
         def __init__(self, cfg):
             super().__init__(cfg)
-            self.encoder = TwoLayerEncoder(cfg)
+            self.encoder = Layer0Layer2Encoder(cfg)
 
     cfg = AntConfig(
         model_type="financial",
@@ -93,6 +142,9 @@ def create_model_b(config):
         d_ff=config.d_ff,
         gate_hidden_dim=config.gate_hidden_dim,
         dropout=config.dropout,
+        use_grouped_freq_attention=config.use_grouped_freq_attention,
+        num_head_groups=config.num_head_groups,
+        group_mix_coeff=config.group_mix_coeff,
         batch_size=config.batch_size,
         lr=config.lr,
         epochs=config.epochs,
@@ -114,6 +166,9 @@ def create_model_c(config):
         d_ff=config.d_ff,
         gate_hidden_dim=config.gate_hidden_dim,
         dropout=config.dropout,
+        use_grouped_freq_attention=config.use_grouped_freq_attention,
+        num_head_groups=config.num_head_groups,
+        group_mix_coeff=config.group_mix_coeff,
         batch_size=config.batch_size,
         lr=config.lr,
         epochs=config.epochs,
@@ -218,7 +273,9 @@ def evaluate_quant(model, loader, device):
     }
 
 
-def run_experiment(model_name, create_fn, train_loader, val_loader, config, device):
+def run_experiment(
+    model_name, create_fn, train_loader, val_loader, test_loader, config, device
+):
     print(f"\n{'=' * 60}")
     print(f"训练模型: {model_name}")
     print(f"{'=' * 60}")
@@ -262,7 +319,7 @@ def run_experiment(model_name, create_fn, train_loader, val_loader, config, devi
             best_state = model.state_dict().copy()
 
     model.load_state_dict(best_state)
-    final_metrics = evaluate_quant(model, val_loader, device)
+    final_metrics = evaluate_quant(model, test_loader, device)
 
     print(f"\n>>> {model_name} 最佳结果:")
     print(f"    IC: {final_metrics['IC']:.4f}")
@@ -274,6 +331,7 @@ def run_experiment(model_name, create_fn, train_loader, val_loader, config, devi
 
 
 def main():
+    set_seed(42)
     print(">>> 加载数据...")
     train_df, val_df, test_df, features, target = prepare_data(
         db_path="data/quant_lab.duckdb", train_end="2023-12-31", val_end="2024-12-31"
@@ -332,20 +390,33 @@ def main():
     results = {}
 
     results["A_Layer0"] = run_experiment(
-        "模型A: 仅 Layer0", create_model_a, train_loader, test_loader, config, device
+        "模型A: 仅 Layer0",
+        create_model_a,
+        train_loader,
+        val_loader,
+        test_loader,
+        config,
+        device,
     )
 
-    results["B_Layer0_NewLayer"] = run_experiment(
-        "模型B: Layer0 + 新Layer",
+    results["B_Layer0_Layer2"] = run_experiment(
+        "模型B: Layer0 + Layer2（剪枝）",
         create_model_b,
         train_loader,
+        val_loader,
         test_loader,
         config,
         device,
     )
 
     results["C_Original4Layer"] = run_experiment(
-        "模型C: 原始4层+gate", create_model_c, train_loader, test_loader, config, device
+        "模型C: 原始4层+gate",
+        create_model_c,
+        train_loader,
+        val_loader,
+        test_loader,
+        config,
+        device,
     )
 
     print("\n" + "=" * 60)

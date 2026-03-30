@@ -113,7 +113,7 @@ def main():
         else:
             combination_result = {"sharpe": sharpe, "max_dd": max_dd}
 
-    if verbose and not args.skip_monthly and not args.skip_combination:
+    if not args.skip_monthly and not args.skip_combination:
         logger.success("评估完成！")
 
 

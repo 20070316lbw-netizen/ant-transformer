@@ -16,6 +16,9 @@ class AntConfig:
     num_layers: int = 4  # 默认层数
     d_ff: int = 1024  # FFN 内层维度
     enable_layer_pruning: bool = True  # 是否启用层裁剪功能
+    use_grouped_freq_attention: bool = False  # 是否启用频率分组注意力
+    num_head_groups: int = 4  # 头部分组数（仅 grouped attention）
+    group_mix_coeff: float = 0.1  # 组间信息混入系数
 
     def update_by_arch(self):
         """根据 model_arch 自动调整架构参数"""
@@ -106,6 +109,11 @@ class AntConfig:
             raise ValueError(
                 f"d_model({self.d_model}) 必须能被 cross_layer_heads({self.cross_layer_heads}) 整除"
             )
+        if self.use_grouped_freq_attention:
+            if self.num_heads % self.num_head_groups != 0:
+                raise ValueError(
+                    f"num_heads({self.num_heads}) 必须能被 num_head_groups({self.num_head_groups}) 整除"
+                )
 
         # 2. 模式校验
         if self.model_type not in ["text", "financial"]:
