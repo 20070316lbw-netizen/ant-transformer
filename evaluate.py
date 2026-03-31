@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy import stats
 from loguru import logger
 import argparse
 import os
@@ -59,6 +60,18 @@ def calculate_metrics(pred_path, verbose=True):
         print(f"年化超额波动: {ann_vol:.2%}")
         print(f"超额 Sharpe:  {sharpe:.4f}")
         print(f"超额 MaxDD:   {max_dd:.2%}")
+        rankic_series = monthly_metrics["RankIC"].dropna()
+        if len(rankic_series) > 1:
+            t_stat, p_value = stats.ttest_1samp(rankic_series, 0)
+            print(f"RankIC t统计量: {t_stat:.4f}")
+            print(f"RankIC p值:     {p_value:.4f}")
+            print(f"正月比例:       {(monthly_metrics['RankIC'] > 0).mean():.2%}")
+            print(f"{'✅ 显著 (p<0.05)' if p_value < 0.05 else '⚠️ 不显著，样本不足'}")
+        else:
+            print("RankIC t统计量: nan")
+            print("RankIC p值:     nan")
+            print(f"正月比例:       {(monthly_metrics['RankIC'] > 0).mean():.2%}")
+            print("⚠️ 不显著，样本不足")
         print("=" * 60 + "\n")
 
     return monthly_metrics, {"sharpe": sharpe, "max_dd": max_dd}
@@ -113,7 +126,7 @@ def main():
         else:
             combination_result = {"sharpe": sharpe, "max_dd": max_dd}
 
-    if verbose and not args.skip_monthly and not args.skip_combination:
+    if not args.skip_monthly and not args.skip_combination:
         logger.success("评估完成！")
 
 
