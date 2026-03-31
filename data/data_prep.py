@@ -4,12 +4,40 @@ import numpy as np
 from loguru import logger
 import os
 
-def prepare_data(db_path='data/quant_lab.duckdb', train_end='2023-12-31', val_end='2024-12-31'):
-    logger.info(f"正在从 {db_path} 加载数据...")
+def prepare_data(db_path='data/quant_lab.duckdb', train_end='2023-12-31', val_end='2024-12-31', use_dummy_data=False):
+    if use_dummy_data:
+        logger.info("使用虚拟数据进行测试...")
+        # 1. 设置随机种子，保证每次生成的虚拟数据一致
+        np.random.seed(42)
 
-    # 使用 context manager，确保连接异常时也能关闭
-    with duckdb.connect(db_path, read_only=True) as conn:
-        df = conn.execute("SELECT * FROM features_cn").df()
+        # 2. 生成特征数据
+        dates = pd.date_range(start="2022-01-01", end="2025-01-01", freq="D")
+        tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "FB"]
+        data = []
+
+        # 每个 ticker 每天生成一条记录
+        for date in dates:
+            for ticker in tickers:
+                record = {
+                    "date": date,
+                    "ticker": ticker,
+                    "mom_20d": np.random.randn(),
+                    "mom_60d": np.random.randn(),
+                    "mom_12m_minus_1m": np.random.randn(),
+                    "vol_60d_res": np.random.randn(),
+                    "sp_ratio": np.random.randn(),
+                    "turn_20d": np.random.randn(),
+                    "label_next_month": np.random.randn(),
+                }
+                data.append(record)
+
+        df = pd.DataFrame(data)
+    else:
+        logger.info(f"正在从 {db_path} 加载数据...")
+
+        # 使用 context manager，确保连接异常时也能关闭
+        with duckdb.connect(db_path, read_only=True) as conn:
+            df = conn.execute("SELECT * FROM features_cn").df()
 
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values(['ticker', 'date'])

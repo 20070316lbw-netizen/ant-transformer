@@ -163,6 +163,7 @@ def main():
         help="损失函数类型: mse 或 ic (Pearson Correlation)",
     )
     parser.add_argument("--no_pruning", action="store_true", help="禁用层裁剪功能")
+    parser.add_argument("--use_dummy_data", action="store_true", help="使用虚拟数据进行快速测试及调试")
     args = parser.parse_args()
 
     # 1. 加载配置文件
@@ -190,6 +191,8 @@ def main():
         config.enable_layer_pruning = False
     if args.seed:
         config.seed = args.seed
+    if args.use_dummy_data:
+        config.use_dummy_data = args.use_dummy_data
 
     config.validate()
 
@@ -204,7 +207,7 @@ def main():
 
     # 4. 数据准备
     train_df, val_df, test_df, features, target_col = prepare_data(
-        train_end=config.train_end, val_end=config.val_end
+        train_end=config.train_end, val_end=config.val_end, use_dummy_data=getattr(config, "use_dummy_data", False)
     )
 
     if config.use_subset and config.subset_size:

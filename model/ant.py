@@ -82,7 +82,7 @@ class AntTransformer(nn.Module):
         self.config = config
 
         # ── 输入端 ──────────────────────────────────────────────
-        if config.model_type == "financial":
+        if getattr(config, "model_type", "text") == "financial":
             self.input_proj = nn.Linear(config.input_dim, config.d_model)
         else:
             self.embedding = nn.Embedding(
@@ -154,7 +154,7 @@ class AntTransformer(nn.Module):
             key_padding_mask = attention_mask == 0  # [B, T]
 
         # ① Embedding / Projection + 位置编码
-        if self.config.model_type == "financial":
+        if getattr(self.config, "model_type", "text") == "financial":
             # input_ids 此时为 [B, T, D_in]
             x = self.input_proj(input_ids)
         else:

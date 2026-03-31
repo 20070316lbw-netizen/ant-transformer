@@ -1,7 +1,9 @@
 # Experiment 1: Full Model
 # 完整4层 Transformer，包含所有层和门控机制
 model:
+  model_type: "financial"
   arch: "full"
+  num_classes: 1
   d_model: 256
   num_heads: 8
   d_ff: 1024

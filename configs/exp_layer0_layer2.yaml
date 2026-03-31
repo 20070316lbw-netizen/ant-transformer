@@ -1,7 +1,9 @@
 # Experiment 2: Reduced Layers
 # 2层 Transformer，训练第0层和第2层，第1层被门控裁剪
 model:
+  model_type: "financial"
   arch: "layer0_layer2"
+  num_classes: 1
   d_model: 256
   num_heads: 8
   d_ff: 1024
