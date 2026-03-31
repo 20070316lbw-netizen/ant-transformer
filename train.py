@@ -153,6 +153,8 @@ def main():
         "--subset", type=int, default=None, help="仅用于快速测试的样本数"
     )
     parser.add_argument("--seed", type=int, default=None, help="覆盖配置文件中的随机种子")
+    parser.add_argument("--train_end", type=str, default=None, help="训练集截止日期 e.g. 2021-12-31")
+    parser.add_argument("--val_end",   type=str, default=None, help="验证集截止日期 e.g. 2024-12-31")
     parser.add_argument(
         "--loss_type",
         type=str,
