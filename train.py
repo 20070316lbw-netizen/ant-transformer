@@ -30,6 +30,14 @@ def set_seed(seed: int = 42):
         torch.cuda.manual_seed_all(seed)
 
 
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def train_one_epoch(
     model, loader, optimizer, criterion, device, gate_lambda, enable_pruning
 ):
@@ -131,6 +139,10 @@ def main():
         config.lr = args.lr
     if args.gate_lambda:
         config.gate_lambda = args.gate_lambda
+    if args.train_end:
+        config.train_end = args.train_end
+    if args.val_end:
+        config.val_end = args.val_end
     if args.no_pruning:
         config.enable_layer_pruning = False
     if args.seed:
