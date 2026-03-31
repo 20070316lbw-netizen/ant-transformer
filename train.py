@@ -9,6 +9,7 @@ import argparse
 import yaml
 import pandas as pd
 import numpy as np
+import random
 from loguru import logger
 
 # 添加项目根目录
@@ -20,6 +21,26 @@ from data.data_prep import prepare_data
 from data.financial_dataset import FinancialDataset
 
 
+def resolve_config_path(config_path: str) -> str:
+    """兼容不同工作目录，优先用传入路径，其次回退到项目根目录下同名文件。"""
+    if os.path.exists(config_path):
+        return config_path
+    repo_relative = os.path.join(os.path.dirname(os.path.abspath(__file__)), config_path)
+    if os.path.exists(repo_relative):
+        return repo_relative
+    raise FileNotFoundError(
+        f"找不到配置文件: {config_path}。请确认当前工作目录或通过 --config 传入绝对路径。"
+    )
+
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def train_one_epoch(
     model, loader, optimizer, criterion, device, gate_lambda, enable_pruning
 ):
@@ -29,7 +50,7 @@ def train_one_epoch(
         x = batch["x"].to(device)
         y = batch["y"].to(device)
         optimizer.zero_grad()
-        logits, _, all_gates = model(x)
+        logits, _, all_gates = model(x, enable_pruning=enable_pruning)
         task_loss = criterion(logits.squeeze(-1), y)
         gate_loss = torch.stack([g.abs().mean() for g in all_gates]).mean()
         loss = task_loss + gate_lambda * gate_loss
@@ -47,27 +68,16 @@ def get_predictions(model, loader, device, features, target):
     all_dates = []
     all_tickers = []
 
-    # 获取原始 dataframe 索引信息
-    df_raw = loader.dataset.df
-
-    for i, batch in enumerate(tqdm(loader, desc="  predicting", leave=False)):
+    for batch in tqdm(loader, desc="  predicting", leave=False):
         x = batch["x"].to(device)
-        y = batch["y"]
-        logits, _, _ = model(x)
+        y = batch["y"].cpu().numpy()
+        logits, _, _ = model(x, enable_pruning=model.config.enable_layer_pruning)
 
         # 记录预测
         all_preds.append(logits.squeeze(-1).cpu().numpy())
-        all_targets.append(y.numpy())
-
-        # 从 dataset 还原日期和代码
-        # 注意：dataset.__getitem__ 返回的是序列最后一个点的日期
-        batch_indices = range(
-            i * loader.batch_size, min((i + 1) * loader.batch_size, len(loader.dataset))
-        )
-        for idx in batch_indices:
-            row = df_raw.iloc[idx + loader.dataset.seq_len - 1]
-            all_dates.append(row["date"])
-            all_tickers.append(row["ticker"])
+        all_targets.append(y)
+        all_dates.extend(batch["date"])
+        all_tickers.extend(batch["ticker"])
 
     return pd.DataFrame(
         {
@@ -104,12 +114,15 @@ def main():
     parser.add_argument(
         "--subset", type=int, default=None, help="仅用于快速测试的样本数"
     )
+    parser.add_argument("--train_end", type=str, default=None)
+    parser.add_argument("--val_end", type=str, default=None)
     parser.add_argument("--no_pruning", action="store_true", help="禁用层裁剪功能")
     args = parser.parse_args()
 
     # 1. 加载配置文件
-    logger.info(f"正在加载配置文件: {args.config}")
-    config = AntConfig.load_from_yaml(args.config)
+    config_path = resolve_config_path(args.config)
+    logger.info(f"正在加载配置文件: {config_path}")
+    config = AntConfig.load_from_yaml(config_path)
 
     # 2. 命令行参数覆盖
     if args.model_arch:
@@ -123,12 +136,17 @@ def main():
         config.lr = args.lr
     if args.gate_lambda:
         config.gate_lambda = args.gate_lambda
+    if getattr(args, "train_end", None):
+        config.train_end = args.train_end
+    if getattr(args, "val_end", None):
+        config.val_end = args.val_end
     if args.no_pruning:
         config.enable_layer_pruning = False
 
     config.validate()
 
     # 3. 设备配置
+    set_seed(getattr(config, "seed", 42))
     device = torch.device(
         "cuda" if config.use_cuda and torch.cuda.is_available() else "cpu"
     )
