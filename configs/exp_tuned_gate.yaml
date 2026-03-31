@@ -1,7 +1,9 @@
 # Experiment 5: Tuned Gate
 # 调整门控权重，看看不同正则化强度的影响
 model:
+  model_type: "financial"
   arch: "full"
+  num_classes: 1
   d_model: 256
   num_heads: 8
   d_ff: 1024

@@ -1,7 +1,9 @@
 # Experiment 4: No Pruning
 # 完整4层 Transformer，但禁用门控机制，所有层都执行
 model:
+  model_type: "financial"
   arch: "full"
+  num_classes: 1
   d_model: 256
   num_heads: 8
   d_ff: 1024

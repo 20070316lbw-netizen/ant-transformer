@@ -1,7 +1,9 @@
 # Experiment 3: Single Layer
 # 1层 Transformer，只训练第0层，其他层被完全裁剪
 model:
+  model_type: "financial"
   arch: "layer0"
+  num_classes: 1
   d_model: 256
   num_heads: 8
   d_ff: 1024
