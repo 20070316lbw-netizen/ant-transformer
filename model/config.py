@@ -48,6 +48,8 @@ class AntConfig:
     gate_lambda: float = 0.01  # 门控 L1 正则权重（鼓励稀疏/跳过层）
 
     # ── 数据 ────────────────────────────────────────────────────
+    train_end: str = "2023-12-31"
+    val_end: str = "2024-12-31"
     tokenizer_name: str = "bert-base-uncased"
     checkpoint_path: str = "ant_best.pt"
     use_dummy_data: bool = False

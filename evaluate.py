@@ -37,6 +37,15 @@ def calculate_metrics(pred_path, verbose=True):
         print(f"分月均值 Rank IC: {mean_rank_ic:.4f}")
         print(f"IC IR:           {ic_ir:.4f}")
 
+        from scipy import stats as scipy_stats
+        t_stat, p_value = scipy_stats.ttest_1samp(monthly_metrics["RankIC"].dropna(), 0)
+        print(f"月度 RankIC 统计:")
+        print(f"  正月比例:   {(monthly_metrics['RankIC'] > 0).mean():.2%}")
+        print(f"  IC_IR:      {mean_ic / monthly_metrics['IC'].std():.4f}")
+        print(f"  t统计量:    {t_stat:.4f}")
+        print(f"  p值:        {p_value:.4f}")
+        print(f"  {'✅ 显著 (p<0.05)' if p_value < 0.05 else '⚠️ 不显著，样本不足'}")
+
     # 2. 多空组合回测 (Long-Short Strategy)
     # 多头 (Long): 前 20% | 空头 (Short): 后 20%
     def ls_strategy_ret(group):
