@@ -58,6 +58,26 @@ def set_seed(seed: int = 42):
         torch.cuda.manual_seed_all(seed)
 
 
+def resolve_config_path(config_path: str) -> str:
+    """兼容不同工作目录，优先用传入路径，其次回退到项目根目录下同名文件。"""
+    if os.path.exists(config_path):
+        return config_path
+    repo_relative = os.path.join(os.path.dirname(os.path.abspath(__file__)), config_path)
+    if os.path.exists(repo_relative):
+        return repo_relative
+    raise FileNotFoundError(
+        f"找不到配置文件: {config_path}。请确认当前工作目录或通过 --config 传入绝对路径。"
+    )
+
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def train_one_epoch(
     model, loader, optimizer, criterion, device, gate_lambda, enable_pruning
 ):
