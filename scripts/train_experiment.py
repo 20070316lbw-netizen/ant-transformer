@@ -86,9 +86,6 @@ def create_model_b(config):
                 cfg.d_ff,
                 cfg.gate_hidden_dim,
                 cfg.dropout,
-                cfg.use_grouped_freq_attention,
-                cfg.num_head_groups,
-                cfg.group_mix_coeff,
             )
             self.layer2 = AntLayer(
                 cfg.d_model,
@@ -97,9 +94,6 @@ def create_model_b(config):
                 cfg.d_ff,
                 cfg.gate_hidden_dim,
                 cfg.dropout,
-                cfg.use_grouped_freq_attention,
-                cfg.num_head_groups,
-                cfg.group_mix_coeff,
             )
 
         def forward(self, x, key_padding_mask=None, enable_pruning=True):
