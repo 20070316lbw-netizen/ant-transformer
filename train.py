@@ -19,6 +19,15 @@ from model.config import AntConfig
 from model.ant import AntTransformer
 from data.data_prep import prepare_data
 from data.financial_dataset import FinancialDataset
+from model.losses import PearsonCorrLoss
+
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def set_seed(seed: int = 42):
@@ -59,7 +68,8 @@ def get_predictions(model, loader, device, features, target):
     for batch in tqdm(loader, desc="  predicting", leave=False):
         x = batch["x"].to(device)
         y = batch["y"].cpu().numpy()
-        logits, _, _ = model(x, enable_pruning=model.config.enable_layer_pruning)
+        real_model = model.module if hasattr(model, 'module') else model
+        logits, _, _ = model(x, enable_pruning=real_model.config.enable_layer_pruning)
 
         # 记录预测
         all_preds.append(logits.squeeze(-1).cpu().numpy())
@@ -102,8 +112,14 @@ def main():
     parser.add_argument(
         "--subset", type=int, default=None, help="仅用于快速测试的样本数"
     )
-    parser.add_argument("--train_end", type=str, default=None)
-    parser.add_argument("--val_end", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=None, help="覆盖配置文件中的随机种子")
+    parser.add_argument(
+        "--loss_type",
+        type=str,
+        default="mse",
+        choices=["mse", "ic"],
+        help="损失函数类型: mse 或 ic (Pearson Correlation)",
+    )
     parser.add_argument("--no_pruning", action="store_true", help="禁用层裁剪功能")
     args = parser.parse_args()
 
@@ -129,6 +145,8 @@ def main():
         config.val_end = args.val_end
     if args.no_pruning:
         config.enable_layer_pruning = False
+    if args.seed:
+        config.seed = args.seed
 
     config.validate()
 
@@ -168,8 +186,20 @@ def main():
         f"初始化模型: {config.model_arch} (num_layers={config.num_layers}, pruning={config.enable_layer_pruning})"
     )
     model = AntTransformer(config).to(device)
+
+    # 多 GPU 支持（Kaggle T4 × 2 等多卡环境）
+    if torch.cuda.device_count() > 1:
+        logger.info(f"检测到 {torch.cuda.device_count()} 张 GPU，启用 DataParallel")
+        model = torch.nn.DataParallel(model)
+
     optimizer = AdamW(model.parameters(), lr=config.lr)
-    criterion = nn.MSELoss()
+
+    if args.loss_type == "ic":
+        criterion = PearsonCorrLoss()
+        logger.info("使用 IC 最大化 (Pearson Correlation) 损失函数")
+    else:
+        criterion = nn.MSELoss()
+        logger.info("使用 MSE 均方误差损失函数")
 
     # 6. 训练
     for epoch in range(1, config.epochs + 1):

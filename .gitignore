@@ -158,3 +158,9 @@ cmake-build-release/
 *.bin
 checkpoint/
 outputs/
+
+# 临时脚本与分析文件
+tmp/
+
+# 本地 DuckDB 数据库（Kaggle 上通过挂载数据集获取，不纳入版本控制）
+data/*.duckdb
