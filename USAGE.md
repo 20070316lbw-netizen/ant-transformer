@@ -228,7 +228,7 @@ python train.py --model_arch layer0
 ### Q: 如何快速测试代码是否工作？
 
 ```bash
-python train.py --subset 100 --epochs 1
+python train.py --use_dummy_data --epochs 1 --batch_size 8
 ```
 
 ### Q: 如何禁用层裁剪？
