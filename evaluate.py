@@ -17,15 +17,26 @@ def calculate_metrics(pred_path, verbose=True):
 
     # 1. 计算分月 IC / Rank IC
     def ic_group(group):
+        if len(group) < 2:
+            return pd.Series({"IC": np.nan, "RankIC": np.nan})
         ic = group["target"].corr(group["pred"])
         rank_ic = group["target"].corr(group["pred"], method="spearman")
         return pd.Series({"IC": ic, "RankIC": rank_ic})
 
+    if len(df) == 0:
+        logger.warning("预测文件为空，无法计算指标。")
+        return pd.DataFrame(columns=["IC", "RankIC"]), {"sharpe": 0, "max_dd": 0}
+
     monthly_metrics = df.groupby("date").apply(ic_group)
 
-    mean_ic = monthly_metrics["IC"].mean()
-    mean_rank_ic = monthly_metrics["RankIC"].mean()
-    ic_ir = mean_ic / monthly_metrics["IC"].std() if len(monthly_metrics) > 1 else 0
+    if "IC" in monthly_metrics.columns:
+        mean_ic = monthly_metrics["IC"].mean()
+        mean_rank_ic = monthly_metrics["RankIC"].mean()
+        ic_ir = mean_ic / monthly_metrics["IC"].std() if len(monthly_metrics) > 1 and monthly_metrics["IC"].std() > 0 else 0
+    else:
+        mean_ic = np.nan
+        mean_rank_ic = np.nan
+        ic_ir = np.nan
 
     if verbose:
         print("\n" + "=" * 60)

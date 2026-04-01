@@ -47,6 +47,12 @@ class AntEncoder(nn.Module):
             ]
         )
 
+    def set_ablation_flags(self, use_cross_layer: bool, use_soft_gating: bool):
+        """传递消融实验标志位到所有 AntLayer"""
+        for layer in self.layers:
+            layer.use_cross_layer = use_cross_layer
+            layer.use_soft_gating = use_soft_gating
+
     def forward(
         self,
         x: torch.Tensor,
