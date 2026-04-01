@@ -1,0 +1,49 @@
+{
+    "timestamp": "2026-04-01 02:29:38",
+    "model_name": "ant_transformer",
+    "config": {
+        "model": {
+            "model_name": "ant_transformer",
+            "model_type": "financial",
+            "arch": "full",
+            "num_classes": 1,
+            "d_model": 256,
+            "num_heads": 8,
+            "d_ff": 1024,
+            "cross_layer_heads": 4,
+            "gate_hidden_dim": 64,
+            "input_dim": 6
+        },
+        "data": {
+            "features": [
+                "mom_20d",
+                "mom_60d",
+                "mom_12m_minus_1m",
+                "vol_60d_res",
+                "sp_ratio",
+                "turn_20d"
+            ],
+            "target": "label_next_month",
+            "seq_len": 6,
+            "train_end": "2023-12-31",
+            "val_end": "2024-12-31",
+            "use_dummy_data": true
+        },
+        "training": {
+            "epochs": 1,
+            "batch_size": 32,
+            "lr": 0.001,
+            "gate_lambda": 0.08,
+            "max_grad_norm": 1.0,
+            "dropout": 0.1,
+            "warmup_steps": 50
+        }
+    },
+    "metrics": {
+        "mean_ic": NaN,
+        "mean_rank_ic": NaN,
+        "ic_ir": null,
+        "sharpe": 0,
+        "max_dd": 0
+    }
+}

@@ -28,6 +28,8 @@ class AntEncoder(nn.Module):
         use_grouped_freq_attention: bool = False,
         num_head_groups: int = 4,
         group_mix_coeff: float = 0.1,
+        use_cross_layer: bool = True,
+        use_soft_gating: bool = True,
     ):
         super().__init__()
         self.layers = nn.ModuleList(
@@ -42,6 +44,8 @@ class AntEncoder(nn.Module):
                     use_grouped_freq_attention,
                     num_head_groups,
                     group_mix_coeff,
+                    use_cross_layer,
+                    use_soft_gating,
                 )
                 for _ in range(num_layers)
             ]
