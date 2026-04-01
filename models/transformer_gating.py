@@ -29,12 +29,10 @@ class GatingTransformerAdapter(BaseModelAdapter):
         self.config.input_dim = input_dim
         # Enable layer pruning (soft gating)
         self.config.enable_layer_pruning = True
+        self.config.use_cross_layer = False
+        self.config.use_soft_gating = True
 
         self.model = AntTransformer(self.config).to(self.device)
-
-        # Disable cross-layer attention, keep soft gating
-        real_model = self.model.module if hasattr(self.model, 'module') else self.model
-        real_model.encoder.set_ablation_flags(use_cross_layer=False, use_soft_gating=True)
 
         if torch.cuda.device_count() > 1:
             self.model = torch.nn.DataParallel(self.model)
@@ -75,7 +73,20 @@ class GatingTransformerAdapter(BaseModelAdapter):
                 total_loss += loss.item() * x.size(0)
 
             avg_loss = total_loss / len(train_loader.dataset)
-            logger.info(f"Epoch {epoch:02d} | Loss: {avg_loss:.6f}")
+
+            # Validation loop
+            self.model.eval()
+            val_loss = 0
+            with torch.no_grad():
+                for batch in val_loader:
+                    x = batch["x"].to(self.device)
+                    y = batch["y"].to(self.device)
+                    logits, _, _ = self.model(x, enable_pruning=True)
+                    loss = criterion(logits.squeeze(-1), y)
+                    val_loss += loss.item() * x.size(0)
+            avg_val_loss = val_loss / len(val_loader.dataset) if len(val_loader.dataset) > 0 else 0
+
+            logger.info(f"Epoch {epoch:02d} | Train Loss: {avg_loss:.6f} | Val Loss: {avg_val_loss:.6f}")
 
     @torch.no_grad()
     def predict(self, test_df: pd.DataFrame, features: List[str], target_col: str, seq_len: int = 6) -> pd.DataFrame:

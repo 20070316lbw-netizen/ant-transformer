@@ -55,6 +55,9 @@ class LightGBMAdapter(BaseModelAdapter):
         train_data = lgb.Dataset(X_train, label=y_train)
         val_data = lgb.Dataset(X_val, label=y_val, reference=train_data)
 
+        num_workers = getattr(self.config, 'num_workers', -1)
+        n_jobs = num_workers if num_workers != 0 else -1
+
         # Basic LightGBM parameters (can be tuned or set via config)
         params = {
             'objective': 'regression',
@@ -63,7 +66,7 @@ class LightGBMAdapter(BaseModelAdapter):
             'num_leaves': getattr(self.config, 'num_leaves', 31),
             'verbose': -1,
             'seed': getattr(self.config, 'seed', 42),
-            'n_jobs': getattr(self.config, 'num_workers', -1) or -1
+            'n_jobs': n_jobs
         }
 
         logger.info("Training LightGBM model...")

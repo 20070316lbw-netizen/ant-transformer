@@ -32,6 +32,8 @@ class AntConfig:
     # ── 小蚂蚁专属超参 ──────────────────────────────────────────
     cross_layer_heads: int = 4  # 跨层 Attention 头数
     gate_hidden_dim: int = 64  # 历史门控 MLP 隐层
+    use_cross_layer: bool = True  # 消融实验标志：是否使用跨层注意力
+    use_soft_gating: bool = True  # 消融实验标志：是否使用历史软门控
 
     # ── 正则化 ──────────────────────────────────────────────────
     dropout: float = 0.1

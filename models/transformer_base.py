@@ -28,22 +28,11 @@ class StandardTransformerAdapter(BaseModelAdapter):
     def _init_model(self, input_dim: int):
         # Update config to act as a standard transformer
         self.config.input_dim = input_dim
-        # Disable layer pruning (soft gating)
         self.config.enable_layer_pruning = False
-        # Disable history lookback (cross-layer attention)
-        # We can simulate this by setting cross_layer_heads to 0 or similar, but AntLayer implementation
-        # might fail if cross_layer_heads is 0 (d_model % cross_layer_heads == 0 check).
-        # We'll rely on our modified AntEncoder if needed, but let's see if setting gate_lambda = 0
-        # and not using the cross-layer output helps, or just setting cross_layer_heads=0
-        # But `config.validate()` has: `if self.d_model % self.cross_layer_heads != 0: raise ValueError(...)`
-        # Thus cross_layer_heads cannot be 0.
-        # We will set a flag in the config to disable it, which we'll need to patch in model/encoder.py or just use the model as is but ignore gates.
-        # Wait, the instruction says "标准 Transformer". We can dynamically inject a parameter `use_cross_layer=False`.
-        self.model = AntTransformer(self.config).to(self.device)
+        self.config.use_cross_layer = False
+        self.config.use_soft_gating = False
 
-        # Disable ablation flags for standard transformer
-        real_model = self.model.module if hasattr(self.model, 'module') else self.model
-        real_model.encoder.set_ablation_flags(use_cross_layer=False, use_soft_gating=False)
+        self.model = AntTransformer(self.config).to(self.device)
 
         if torch.cuda.device_count() > 1:
             self.model = torch.nn.DataParallel(self.model)
@@ -80,7 +69,20 @@ class StandardTransformerAdapter(BaseModelAdapter):
                 total_loss += loss.item() * x.size(0)
 
             avg_loss = total_loss / len(train_loader.dataset)
-            logger.info(f"Epoch {epoch:02d} | Loss: {avg_loss:.6f}")
+
+            # Validation loop
+            self.model.eval()
+            val_loss = 0
+            with torch.no_grad():
+                for batch in val_loader:
+                    x = batch["x"].to(self.device)
+                    y = batch["y"].to(self.device)
+                    logits, _, _ = self.model(x, enable_pruning=False)
+                    loss = criterion(logits.squeeze(-1), y)
+                    val_loss += loss.item() * x.size(0)
+            avg_val_loss = val_loss / len(val_loader.dataset) if len(val_loader.dataset) > 0 else 0
+
+            logger.info(f"Epoch {epoch:02d} | Train Loss: {avg_loss:.6f} | Val Loss: {avg_val_loss:.6f}")
 
     @torch.no_grad()
     def predict(self, test_df: pd.DataFrame, features: List[str], target_col: str, seq_len: int = 6) -> pd.DataFrame:

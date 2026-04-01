@@ -62,8 +62,13 @@ class AntLayer(nn.Module):
         use_grouped_freq_attention: bool = False,
         num_head_groups: int = 4,
         group_mix_coeff: float = 0.1,
+        use_cross_layer: bool = True,
+        use_soft_gating: bool = True,
     ):
         super().__init__()
+        self.use_cross_layer = use_cross_layer
+        self.use_soft_gating = use_soft_gating
+
         self.self_attn = StandardSelfAttention(
             d_model,
             num_heads,
@@ -97,11 +102,8 @@ class AntLayer(nn.Module):
         # ① 标准自注意力
         sa_out = self.self_attn(h_input, key_padding_mask=key_padding_mask)
 
-        # 兼容消融实验：支持关闭跨层注意力
-        use_cross_layer = getattr(self, "use_cross_layer", True)
-
         # ② 跨层注意力（attend 历史）
-        if use_cross_layer:
+        if self.use_cross_layer:
             cross_out = self.cross_attn(sa_out, prev_hiddens)
             combined = self.combine_norm(sa_out + cross_out)
         else:
@@ -112,9 +114,7 @@ class AntLayer(nn.Module):
         ffn_out = self.ffn(combined)
 
         # ④ 历史驱动门控（如果启用）
-        # 兼容消融实验：支持关闭历史门控（软门控）
-        use_soft_gating = getattr(self, "use_soft_gating", True)
-        if enable_pruning and use_soft_gating:
+        if enable_pruning and self.use_soft_gating:
             h_out, gate_val = self.gate(cross_out, ffn_out, h_input)
         else:
             # 不启用裁剪或门控，直接使用 FFN 输出 + 残差

@@ -1,0 +1,37 @@
+{
+    "standard_transformer": {
+        "mean_ic": NaN,
+        "mean_rank_ic": NaN,
+        "ic_ir": null,
+        "sharpe": 0,
+        "max_dd": 0
+    },
+    "transformer_gating": {
+        "mean_ic": NaN,
+        "mean_rank_ic": NaN,
+        "ic_ir": null,
+        "sharpe": 0,
+        "max_dd": 0
+    },
+    "transformer_lookback": {
+        "mean_ic": NaN,
+        "mean_rank_ic": NaN,
+        "ic_ir": null,
+        "sharpe": 0,
+        "max_dd": 0
+    },
+    "ant_transformer": {
+        "mean_ic": NaN,
+        "mean_rank_ic": NaN,
+        "ic_ir": null,
+        "sharpe": 0,
+        "max_dd": 0
+    },
+    "lightgbm": {
+        "mean_ic": NaN,
+        "mean_rank_ic": NaN,
+        "ic_ir": null,
+        "sharpe": 0,
+        "max_dd": 0
+    }
+}

@@ -107,6 +107,8 @@ class AntTransformer(nn.Module):
             use_grouped_freq_attention=config.use_grouped_freq_attention,
             num_head_groups=config.num_head_groups,
             group_mix_coeff=config.group_mix_coeff,
+            use_cross_layer=getattr(config, 'use_cross_layer', True),
+            use_soft_gating=getattr(config, 'use_soft_gating', True),
         )
 
         # ── 分类头 ──────────────────────────────────────────────
