@@ -1,13 +1,14 @@
 import subprocess
 import pandas as pd
 import os
+import sys
 
 seeds = [42, 123, 2026]
 summary = []
 
 def run_cmd(cmd):
-    print(f"Running: {cmd}")
-    subprocess.run(cmd, shell=True, check=True)
+    print(f"Running: {' '.join(cmd)}")
+    subprocess.run(cmd, check=True)
 
 for seed in seeds:
     print(f"\n{'='*40}")
@@ -15,7 +16,7 @@ for seed in seeds:
     print(f"{'='*40}")
     
     # 1. Train
-    run_cmd(f"./.venv/Scripts/python train.py --model_arch layer0 --epochs 3 --seed {seed}")
+    run_cmd([sys.executable, "train.py", "--model_arch", "layer0", "--epochs", "3", "--seed", str(seed)])
     
     # 2. Negate Predictions
     pred_file = "outputs/pred_layer0.csv"
@@ -28,6 +29,6 @@ for seed in seeds:
     # 3. Evaluate and Capture Output
     # 这里我们直接手动调用 evaluate 逻辑或者简单获取 Sharpe
     # 为了简单起见，我们直接运行 evaluate.py 并在日志中查看结果
-    run_cmd(f"./.venv/Scripts/python evaluate.py --pred_path {neg_file}")
+    run_cmd([sys.executable, "evaluate.py", "--pred_path", neg_file])
 
 print("\n>>> Robustness Check Completed.")
