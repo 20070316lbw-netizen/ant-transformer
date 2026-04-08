@@ -13,25 +13,18 @@ def prepare_data(db_path='data/quant_lab.duckdb', train_end='2023-12-31', val_en
         # 2. 生成特征数据
         dates = pd.date_range(start="2022-01-01", end="2025-01-01", freq="D")
         tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "FB"]
-        data = []
 
-        # 每个 ticker 每天生成一条记录
-        for date in dates:
-            for ticker in tickers:
-                record = {
-                    "date": date,
-                    "ticker": ticker,
-                    "mom_20d": np.random.randn(),
-                    "mom_60d": np.random.randn(),
-                    "mom_12m_minus_1m": np.random.randn(),
-                    "vol_60d_res": np.random.randn(),
-                    "sp_ratio": np.random.randn(),
-                    "turn_20d": np.random.randn(),
-                    "label_next_month": np.random.randn(),
-                }
-                data.append(record)
+        # 向量化生成虚拟数据
+        multi_idx = pd.MultiIndex.from_product([dates, tickers], names=["date", "ticker"])
+        num_records = len(multi_idx)
+        feature_data = np.random.randn(num_records, 7)
+        columns = [
+            "mom_20d", "mom_60d", "mom_12m_minus_1m",
+            "vol_60d_res", "sp_ratio", "turn_20d",
+            "label_next_month"
+        ]
 
-        df = pd.DataFrame(data)
+        df = pd.DataFrame(feature_data, index=multi_idx, columns=columns).reset_index()
     else:
         logger.info(f"正在从 {db_path} 加载数据...")
 
