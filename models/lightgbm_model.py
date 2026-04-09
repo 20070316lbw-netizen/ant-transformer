@@ -36,16 +36,20 @@ class LightGBMAdapter(BaseModelAdapter):
             dates = group["date"].dt.strftime("%Y-%m-%d").values
             tickers = group["ticker"].values
 
-            num_samples = len(group) - seq_len + 1
-            for i in range(num_samples):
-                # Flatten seq_len * num_features
-                x_flat = feats[i:i + seq_len].flatten()
-                all_x.append(x_flat)
-                all_y.append(labels[i + seq_len - 1])
-                all_dates.append(dates[i + seq_len - 1])
-                all_tickers.append(tickers[i + seq_len - 1])
+            # Vectorized sliding window
+            windowed_feats = np.lib.stride_tricks.sliding_window_view(feats, seq_len, axis=0)
+            windowed_feats = windowed_feats.swapaxes(1, 2)
+            x_flat = windowed_feats.reshape(windowed_feats.shape[0], -1)
 
-        return np.array(all_x), np.array(all_y), all_dates, all_tickers
+            all_x.append(x_flat)
+            all_y.append(labels[seq_len - 1:])
+            all_dates.extend(dates[seq_len - 1:])
+            all_tickers.extend(tickers[seq_len - 1:])
+
+        if not all_x:
+            return np.array([]), np.array([]), [], []
+
+        return np.concatenate(all_x, axis=0), np.concatenate(all_y, axis=0), all_dates, all_tickers
 
     def fit(self, train_df: pd.DataFrame, val_df: pd.DataFrame, features: List[str], target_col: str, seq_len: int = 6):
         logger.info("Preparing tabular data for LightGBM...")
