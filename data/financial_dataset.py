@@ -14,9 +14,15 @@ class FinancialDataset(Dataset):
         self.feature_cols = feature_cols
         self.target_col = target_col
 
+        # Pre-format dates for performance
+        if "date" in df.columns:
+            df_working = df.assign(_formatted_date=df["date"].dt.strftime("%Y-%m-%d"))
+        else:
+            df_working = df.copy()
+
         # 按照 ticker 分组并生成序列索引
         self.samples = []
-        for ticker, group in df.groupby("ticker"):
+        for ticker, group in df_working.groupby("ticker"):
             if len(group) < seq_len:
                 continue
 
@@ -24,7 +30,7 @@ class FinancialDataset(Dataset):
             features = group[feature_cols].values.astype(np.float32)
             labels = group[target_col].values.astype(np.float32)
 
-            dates = group["date"].dt.strftime("%Y-%m-%d").values
+            dates = group["_formatted_date"].values if "_formatted_date" in group else group["date"].values
             tickers = group["ticker"].values
 
             # 滑动窗口
