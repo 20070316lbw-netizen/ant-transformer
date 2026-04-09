@@ -42,49 +42,9 @@ def orig_prep(df, features, target_col, seq_len):
 
     return np.array(all_x), np.array(all_y), all_dates, all_tickers
 
-def new_prep(df, features, target_col, seq_len):
-    all_x = []
-    all_y = []
-    all_dates = []
-    all_tickers = []
+from models.lightgbm_model import LightGBMAdapter
 
-    for ticker, group in df.groupby("ticker"):
-        if len(group) < seq_len:
-            continue
-
-        feats = group[features].values
-        labels = group[target_col].values
-        dates = group["date"].dt.strftime("%Y-%m-%d").values
-        tickers = group["ticker"].values
-
-        # vectorized
-        windowed_feats = np.lib.stride_tricks.sliding_window_view(feats, seq_len, axis=0)
-        windowed_feats = windowed_feats.swapaxes(1, 2)
-        x_flat = windowed_feats.reshape(windowed_feats.shape[0], -1)
-
-        all_x.append(x_flat)
-        all_y.append(labels[seq_len - 1:])
-        all_dates.append(dates[seq_len - 1:])
-        all_tickers.append(tickers[seq_len - 1:])
-
-    if not all_x:
-        return np.array([]), np.array([]), [], []
-
-    all_x = np.concatenate(all_x, axis=0)
-    all_y = np.concatenate(all_y, axis=0)
-
-    # keeping lists as per original
-    all_dates_flat = []
-    for sublist in all_dates:
-        all_dates_flat.extend(sublist)
-
-    all_tickers_flat = []
-    for sublist in all_tickers:
-        all_tickers_flat.extend(sublist)
-
-    return all_x, all_y, all_dates_flat, all_tickers_flat
-
-df, features = create_dummy_data(200, 1000, 20)
+df, features = create_dummy_data(50, 500, 20)
 
 print("Starting original...")
 t0 = time.time()
@@ -93,8 +53,9 @@ t1_time = time.time() - t0
 print(f"Original took {t1_time:.4f}s")
 
 print("Starting new...")
+adapter = LightGBMAdapter()
 t0 = time.time()
-x2, y2, d2, t2 = new_prep(df, features, "target", 6)
+x2, y2, d2, t2 = adapter._prepare_tabular_data(df, features, "target", seq_len=6)
 t2_time = time.time() - t0
 print(f"New took {t2_time:.4f}s")
 
