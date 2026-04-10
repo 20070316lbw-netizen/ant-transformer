@@ -52,12 +52,17 @@ def prepare_data(db_path='data/quant_lab.duckdb', train_end='2023-12-31', val_en
     test_df  = df[df['date'] > val_end].copy()
 
     # 只在 train 集上计算中位数，再应用到 val/test
-    for col in feature_cols:
-        if train_df[col].isnull().any():
-            filler = train_df[col].median()   # 仅用训练集统计量
-            train_df[col] = train_df[col].fillna(filler)
-            val_df[col]   = val_df[col].fillna(filler)
-            test_df[col]  = test_df[col].fillna(filler)
+    medians = train_df[feature_cols].median()
+    missing_mask = train_df[feature_cols].isnull().any()
+    missing_cols = missing_mask[missing_mask].index
+
+    if len(missing_cols) > 0:
+        fill_dict = medians[missing_cols].to_dict()
+        train_df.fillna(value=fill_dict, inplace=True)
+        val_df.fillna(value=fill_dict, inplace=True)
+        test_df.fillna(value=fill_dict, inplace=True)
+
+        for col, filler in fill_dict.items():
             logger.warning(f"字段 {col} 存在缺失，已使用训练集中位数 {filler:.4f} 填充")
 
     logger.info(f"切分完成: Train={len(train_df)}, Val={len(val_df)}, Test={len(test_df)}")
