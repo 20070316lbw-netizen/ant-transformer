@@ -9,7 +9,6 @@ import os
 from model.config import AntConfig
 from model.ant import AntTransformer
 from data.data_prep import prepare_data
-from data.financial_dataset import FinancialDataset
 
 # 添加项目根目录
 sys.path.append(os.getcwd())
